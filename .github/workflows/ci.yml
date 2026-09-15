@@ -1,0 +1,100 @@
+name: Ghost v17 CI
+on:
+  push:
+    branches: [main, "v17-*"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  python-quality:
+    name: Python ${{ matrix.python }} quality
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "${{ matrix.python }}"}
+      - run: python -m pip install -r requirements.txt
+      - run: python -m compileall -q app.py ghost_builder tests
+      - run: python -m unittest discover -s tests -v
+  windows-app:
+    name: Windows standalone EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: python -m pip install -r requirements-build.txt
+      - run: python -m compileall -q app.py ghost_builder tests
+      - run: python -m unittest discover -s tests -v
+      - run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --name "Ghost-APK-Builder" app.py
+      - name: Smoke-launch standalone EXE without Python runtime variables
+        shell: pwsh
+        run: |
+          Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+          Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+          $p=Start-Process -FilePath "dist/Ghost-APK-Builder.exe" -ArgumentList "--smoke-test" -PassThru
+          if(-not $p.WaitForExit(20000)){Stop-Process -Id $p.Id -Force;throw "EXE smoke timeout"}
+          if($p.ExitCode -ne 0){throw "EXE smoke failed: $($p.ExitCode)"}
+      - uses: actions/upload-artifact@v4
+        with: {name: ghost-v17-windows-exe, path: dist/Ghost-APK-Builder.exe}
+  android-api36-smoke:
+    name: Real Android API 36 APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "21"}
+      - name: Install Android API 36 from runner SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)"
+          fi
+          test -n "$SDKMANAGER"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --version
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: "9.6.0"}
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          from ghost_builder.generator import AndroidProjectGenerator
+          from ghost_builder.model import ProjectConfig
+          AndroidProjectGenerator().generate(Path("ci-project"),ProjectConfig(app_name="Ghost CI",package_name="com.swir.ghostci",target_sdk=36,permission_camera=True,permission_microphone=True,output_dir="out"))
+          PY
+      - working-directory: ci-project
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - run: test -f ci-project/app/build/outputs/apk/debug/app-debug.apk
+  managed-engine-smoke:
+    name: Isolated managed Build Engine
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env: {GHOST_FORCE_MANAGED_TOOLCHAIN: "1"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: python -m pip install -r requirements.txt
+      - shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import shutil
+          from ghost_builder.core import Paths,ToolchainManager
+          root=Path.cwd()/".ghost-ci-managed";shutil.rmtree(root,ignore_errors=True);paths=Paths(root);engine=ToolchainManager(paths,lambda level,msg:print(f"[{level}] {msg}"));assert not engine.ready(),engine.status();engine.provision(accept_android_sdk_license=True);assert engine.ready(),engine.status();paths.bundletool.write_bytes(b"damaged");android_jar=paths.sdk/"platforms"/"android-36"/"android.jar";android_jar.unlink();engine.repair(accept_android_sdk_license=True);assert engine.ready(),engine.status();assert android_jar.exists();print("Managed Build Engine Prepare/Repair gate passed")
+          '@|Set-Content ghost_managed_ci.py
+          python ghost_managed_ci.py
