@@ -18,6 +18,7 @@ ctk.set_default_color_theme("dark-blue")
 
 class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
     TABS = ("home", "project", "android", "kotlin", "signing", "engine", "logs")
+    SIMPLE_TABS = ("home", "project")
 
     def __init__(self, smoke_test: bool = False):
         super().__init__()
@@ -25,6 +26,7 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         self.store = ConfigStore(self.paths.config)
         saved = self.store.load()
         self.lang = normalize_language(saved.get("language") or detect_system_language())
+        self.ui_mode = saved.get("ui_mode") if saved.get("ui_mode") in {"simple", "advanced"} else "simple"
         self.t = Translator(self.lang)
         self.events: queue.Queue[tuple[str, str]] = queue.Queue()
         self.toolchain = ToolchainManager(self.paths, self._emit)
@@ -41,6 +43,7 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
 
         self._build_ui()
         self._load_config(saved)
+        self._apply_ui_mode(self.ui_mode, persist=False)
         self.after(80, self._drain_events)
         self.after(180, self.refresh_engine_status)
 
@@ -65,6 +68,19 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         self.language_var = ctk.StringVar(value="PL" if self.lang == "pl" else "EN")
         ctk.CTkSegmentedButton(head, values=["PL", "EN"], variable=self.language_var, command=self._switch_language, selected_color=BLUE).pack(side="right", padx=12)
         self.trw(ctk.CTkLabel(head, text_color=MUTED), "lang.label").pack(side="right")
+        simple_label, advanced_label = self._mode_labels()
+        self.ui_mode_var = ctk.StringVar(value=simple_label if self.ui_mode == "simple" else advanced_label)
+        self.mode_switch = ctk.CTkSegmentedButton(
+            head,
+            values=[simple_label, advanced_label],
+            variable=self.ui_mode_var,
+            command=self._switch_ui_mode,
+            selected_color=ACCENT,
+            selected_hover_color="#18f0d0",
+            unselected_color=CARD,
+        )
+        self.mode_switch.pack(side="right", padx=(0, 12))
+
         sub = ctk.CTkFrame(self, fg_color=BG)
         sub.pack(fill="x", padx=28, pady=(0, 8))
         self.trw(ctk.CTkLabel(sub, text_color=MUTED), "app.subtitle").pack(side="left")
