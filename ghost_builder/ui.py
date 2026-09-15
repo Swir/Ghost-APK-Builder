@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import queue
+from dataclasses import asdict
+from pathlib import Path
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
@@ -8,6 +11,8 @@ from . import ANDROID_API, APP_NAME, BUILD_TOOLS, VERSION
 from .builder import GhostBuilder
 from .core import ConfigStore, Paths, ToolchainManager
 from .i18n import Translator, detect_system_language, normalize_language
+from .project_store import RecentProjects, load_project, save_project
+from .readiness import check_play_readiness
 from .ui_actions import ActionsMixin
 from .ui_layout import LayoutMixin
 from .ui_theme import ACCENT, BG, BLUE, CARD, MUTED, SURFACE, TEXT, WARNING
@@ -24,6 +29,8 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         super().__init__()
         self.paths = Paths()
         self.store = ConfigStore(self.paths.config)
+        self.recent_projects = RecentProjects(self.paths.root / "recent_projects.json", limit=8)
+        self.current_project_path: Path | None = None
         saved = self.store.load()
         self.lang = normalize_language(saved.get("language") or detect_system_language())
         self.ui_mode = saved.get("ui_mode") if saved.get("ui_mode") in {"simple", "advanced"} else "simple"
@@ -42,8 +49,10 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_ui()
+        self._build_project_productivity_ui()
         self._load_config(saved)
         self._apply_ui_mode(self.ui_mode, persist=False)
+        self._refresh_recent_projects()
         self.after(80, self._drain_events)
         self.after(180, self.refresh_engine_status)
 
@@ -93,12 +102,124 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
     def _switch_language(self, value):
         ActionsMixin._switch_language(self, value)
         self._apply_ui_mode(self.ui_mode, persist=False)
+        self._refresh_recent_projects()
+        self._refresh_productivity_labels()
 
     def save_config(self, quiet=False):
         ActionsMixin.save_config(self, quiet=quiet)
         data = self.store.load()
         data["ui_mode"] = self.ui_mode
         self.store.save(data)
+
+    def _build_project_productivity_ui(self) -> None:
+        project_tab = self._tab("project")
+        tools = ctk.CTkFrame(project_tab, fg_color=CARD, corner_radius=14)
+        tools.pack(fill="x", padx=12, pady=10)
+        self.profile_title = ctk.CTkLabel(tools, text_color=TEXT, font=ctk.CTkFont(size=16, weight="bold"))
+        self.profile_title.pack(side="left", padx=16, pady=14)
+        self.profile_open_btn = ctk.CTkButton(tools, width=130, fg_color=CARD, command=self.open_project_profile)
+        self.profile_open_btn.pack(side="right", padx=(6, 14), pady=10)
+        self.profile_save_btn = ctk.CTkButton(tools, width=130, fg_color=BLUE, command=self.save_project_profile)
+        self.profile_save_btn.pack(side="right", padx=6, pady=10)
+        self.play_check_btn = ctk.CTkButton(tools, width=160, fg_color=ACCENT, text_color="#04100e", command=self.show_play_readiness)
+        self.play_check_btn.pack(side="right", padx=6, pady=10)
+
+        home_tab = self._tab("home")
+        self.recent_box = ctk.CTkFrame(home_tab, fg_color=CARD, corner_radius=14)
+        self.recent_box.pack(fill="x", padx=14, pady=10)
+        self.recent_title = ctk.CTkLabel(self.recent_box, text_color=TEXT, font=ctk.CTkFont(size=16, weight="bold"), anchor="w")
+        self.recent_title.pack(fill="x", padx=16, pady=(14, 6))
+        self.recent_rows = ctk.CTkFrame(self.recent_box, fg_color="transparent")
+        self.recent_rows.pack(fill="x", padx=12, pady=(0, 12))
+        self._refresh_productivity_labels()
+
+    def _refresh_productivity_labels(self) -> None:
+        pl = self.lang == "pl"
+        self.profile_title.configure(text="Profil projektu .ghostproject" if pl else "Project profile .ghostproject")
+        self.profile_open_btn.configure(text="Otwórz projekt" if pl else "Open project")
+        self.profile_save_btn.configure(text="Zapisz projekt" if pl else "Save project")
+        self.play_check_btn.configure(text="Gotowość Google Play" if pl else "Google Play readiness")
+        self.recent_title.configure(text="Ostatnie projekty" if pl else "Recent projects")
+
+    def _apply_project_config(self, cfg) -> None:
+        self._load_config(asdict(cfg))
+        self.code.delete("1.0", "end")
+        self.code.insert("1.0", cfg.custom_source or "")
+
+    def save_project_profile(self) -> None:
+        initial = self.current_project_path.name if self.current_project_path else f"{self.app_name.get().strip() or 'Ghost-App'}.ghostproject"
+        path = filedialog.asksaveasfilename(defaultextension=".ghostproject", initialfile=initial, filetypes=[("Ghost Project", "*.ghostproject")])
+        if not path:
+            return
+        try:
+            target = save_project(path, self._config())
+            self.current_project_path = target
+            self.recent_projects.add(target)
+            self._refresh_recent_projects()
+            self._append_log("success", f"Project profile saved: {target}")
+            messagebox.showinfo("Ghost APK Builder", ("Projekt zapisany:\n" if self.lang == "pl" else "Project saved:\n") + str(target))
+        except Exception as exc:
+            messagebox.showerror("Ghost APK Builder", str(exc))
+
+    def open_project_profile(self, path: str | Path | None = None) -> None:
+        selected = str(path) if path else filedialog.askopenfilename(filetypes=[("Ghost Project", "*.ghostproject")])
+        if not selected:
+            return
+        try:
+            source = Path(selected)
+            cfg = load_project(source)
+            self._apply_project_config(cfg)
+            self.current_project_path = source
+            self.recent_projects.add(source)
+            self._refresh_recent_projects()
+            self._append_log("success", f"Project profile opened: {source}")
+            self._go_tab("project")
+        except Exception as exc:
+            self.recent_projects.remove(selected)
+            self._refresh_recent_projects()
+            messagebox.showerror("Ghost APK Builder", str(exc))
+
+    def _refresh_recent_projects(self) -> None:
+        if not hasattr(self, "recent_rows"):
+            return
+        for child in self.recent_rows.winfo_children():
+            child.destroy()
+        items = self.recent_projects.load()
+        if not items:
+            ctk.CTkLabel(self.recent_rows, text="Brak zapisanych projektów" if self.lang == "pl" else "No saved projects yet", text_color=MUTED).pack(anchor="w", padx=4, pady=6)
+            return
+        for item in items[:5]:
+            path = Path(item)
+            row = ctk.CTkFrame(self.recent_rows, fg_color="transparent")
+            row.pack(fill="x", pady=3)
+            ctk.CTkLabel(row, text=path.stem, text_color=TEXT, anchor="w").pack(side="left", fill="x", expand=True)
+            ctk.CTkLabel(row, text=str(path.parent), text_color=MUTED, anchor="e").pack(side="left", padx=10)
+            ctk.CTkButton(row, width=90, text="Otwórz" if self.lang == "pl" else "Open", fg_color=BLUE, command=lambda p=path: self.open_project_profile(p)).pack(side="right")
+
+    def show_play_readiness(self) -> None:
+        report = check_play_readiness(self._config())
+        pl = self.lang == "pl"
+        labels_pl = {
+            "app_name_required":"Brak nazwy aplikacji.","package":"Nieprawidłowa nazwa pakietu.","version_name":"Nieprawidłowa nazwa wersji.","version_code":"Version code musi być dodatni.","target_sdk":"Target SDK musi mieć co najmniej API 36.","sdk_order":"Min SDK nie może być wyższe od Target SDK.","play_target_api":"Google Play wymaga aktualnego profilu API 36+.","play_release_required":"Przełącz Build mode na Release.","play_aab_recommended":"Do Google Play zalecany jest AAB zamiast APK.","play_signing_required":"Włącz podpisywanie Release.","play_keystore_missing":"Brakuje pliku keystore.","play_alias_missing":"Brakuje aliasu klucza.","play_icon_default":"Używana będzie domyślna ikona Ghost; warto ustawić własną.","play_icon_missing":"Wybrany plik ikony nie istnieje.","play_cleartext_enabled":"Cleartext HTTP jest włączony.","play_backup_enabled":"Android backup jest włączony."}
+        labels_en = {
+            "app_name_required":"Application name is missing.","package":"Package name is invalid.","version_name":"Version name is invalid.","version_code":"Version code must be positive.","target_sdk":"Target SDK must be API 36 or newer.","sdk_order":"Min SDK cannot exceed Target SDK.","play_target_api":"Google Play requires the current API 36+ profile.","play_release_required":"Switch Build mode to Release.","play_aab_recommended":"AAB is recommended for Google Play instead of APK.","play_signing_required":"Enable Release signing.","play_keystore_missing":"Keystore file is missing.","play_alias_missing":"Key alias is missing.","play_icon_default":"Ghost default icon will be used; a custom icon is recommended.","play_icon_missing":"Selected icon file does not exist.","play_cleartext_enabled":"Cleartext HTTP is enabled.","play_backup_enabled":"Android backup is enabled."}
+        labels = labels_pl if pl else labels_en
+        if report.ready:
+            title = "GOTOWE DLA GOOGLE PLAY" if pl else "READY FOR GOOGLE PLAY"
+        else:
+            title = "WYMAGA POPRAWEK" if pl else "NEEDS ATTENTION"
+        lines = [title, ""]
+        if report.errors:
+            lines.append("Błędy:" if pl else "Errors:")
+            lines.extend(f"• {labels.get(x.code, x.code)}" for x in report.errors)
+        if report.warnings:
+            lines.append("")
+            lines.append("Ostrzeżenia:" if pl else "Warnings:")
+            lines.extend(f"• {labels.get(x.code, x.code)}" for x in report.warnings)
+        if report.ready:
+            messagebox.showinfo("Google Play", "\n".join(lines))
+        else:
+            messagebox.showwarning("Google Play", "\n".join(lines))
 
     def _build_ui(self) -> None:
         head = ctk.CTkFrame(self, fg_color=BG)
@@ -113,17 +234,8 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         self.trw(ctk.CTkLabel(head, text_color=MUTED), "lang.label").pack(side="right")
         simple_label, advanced_label = self._mode_labels()
         self.ui_mode_var = ctk.StringVar(value=simple_label if self.ui_mode == "simple" else advanced_label)
-        self.mode_switch = ctk.CTkSegmentedButton(
-            head,
-            values=[simple_label, advanced_label],
-            variable=self.ui_mode_var,
-            command=self._switch_ui_mode,
-            selected_color=ACCENT,
-            selected_hover_color="#18f0d0",
-            unselected_color=CARD,
-        )
+        self.mode_switch = ctk.CTkSegmentedButton(head, values=[simple_label, advanced_label], variable=self.ui_mode_var, command=self._switch_ui_mode, selected_color=ACCENT, selected_hover_color="#18f0d0", unselected_color=CARD)
         self.mode_switch.pack(side="right", padx=(0, 12))
-
         sub = ctk.CTkFrame(self, fg_color=BG)
         sub.pack(fill="x", padx=28, pady=(0, 8))
         self.trw(ctk.CTkLabel(sub, text_color=MUTED), "app.subtitle").pack(side="left")

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — post beta.1
+
+### Added
+- `.ghostproject` project profiles with full non-secret project settings and Kotlin source persistence.
+- Recent Projects list with deduplication, missing-file cleanup and quick reopen actions.
+- Google Play readiness report covering API target, package/version data, Release mode, AAB suitability, signing, keystore/alias, icon state, cleartext HTTP and backup warnings.
+- Polish/English UI actions for profiles, recent projects and Play readiness.
+
+### Security
+- Project profiles recursively remove signing-password fields before writing files.
+
+### Tests
+- Project profile round-trip and secret-filter tests.
+- Recent Projects limit/deduplication tests.
+- Google Play readiness fail/pass scenarios.
+
 ## 17.0.0-beta.1 — 2026-09-15
 
 ### Added
