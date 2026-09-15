@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 from typing import Callable
 
+from .certificates import parse_keytool_fingerprints
 from .core import ToolchainManager
 from .generator import AndroidProjectGenerator
 from .model import ProjectConfig
@@ -136,19 +137,49 @@ class GhostBuilder:
         if not keytool:
             raise RuntimeError("keytool is not available. Prepare Build Engine first.")
         path.parent.mkdir(parents=True, exist_ok=True)
+        env = self.toolchain.env()
+        env["GHOST_KEYTOOL_STOREPASS"] = password
+        env["GHOST_KEYTOOL_KEYPASS"] = password
         result = subprocess.run(
             [
                 str(keytool), "-genkeypair", "-v", "-keystore", str(path), "-alias", alias,
                 "-keyalg", "RSA", "-keysize", "3072", "-validity", "10000",
-                "-storepass", password, "-keypass", password,
+                "-storepass:env", "GHOST_KEYTOOL_STOREPASS", "-keypass:env", "GHOST_KEYTOOL_KEYPASS",
                 "-dname", "CN=Ghost App, OU=Ghost Builder, O=Swir, L=Local, ST=Local, C=NO",
             ],
+            env=env,
             capture_output=True,
             text=True,
             shell=False,
         )
         if result.returncode != 0:
             raise RuntimeError(result.stdout + result.stderr)
+
+    def certificate_fingerprints(self, path: Path, password: str, alias: str) -> dict[str, str]:
+        keytool = self.toolchain.keytool_exe()
+        if not keytool:
+            raise RuntimeError("keytool is not available. Prepare Build Engine first.")
+        if not Path(path).is_file():
+            raise FileNotFoundError(f"Keystore not found: {path}")
+        if not alias.strip():
+            raise ValueError("Key alias is required.")
+        if not password:
+            raise ValueError("Keystore password is required for this session.")
+        env = self.toolchain.env()
+        env["GHOST_KEYTOOL_STOREPASS"] = password
+        result = subprocess.run(
+            [str(keytool), "-list", "-v", "-keystore", str(path), "-alias", alias.strip(), "-storepass:env", "GHOST_KEYTOOL_STOREPASS"],
+            env=env,
+            capture_output=True,
+            text=True,
+            shell=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError((result.stdout + "\n" + result.stderr).strip())
+        fingerprints = parse_keytool_fingerprints(result.stdout + "\n" + result.stderr)
+        if "SHA1" not in fingerprints or "SHA256" not in fingerprints:
+            raise RuntimeError("Could not read SHA-1/SHA-256 certificate fingerprints.")
+        return fingerprints
 
     def deploy_to_connected_device(self, apk: Path, package_name: str, activity: str) -> None:
         adb = self.toolchain.adb_exe()
