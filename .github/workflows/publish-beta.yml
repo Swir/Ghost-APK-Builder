@@ -1,9 +1,9 @@
-name: Trigger Ghost Beta Publish
+name: Trigger Ghost v17 Publish
 
 on:
   push:
     branches:
-      - "release/v17.0.0-beta.1"
+      - "release/v17.*"
 
 permissions:
   actions: write
@@ -13,11 +13,21 @@ jobs:
   dispatch-release:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#release/}"
+          if [[ ! "$VERSION" =~ ^v17\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid v17 release branch version: $VERSION" >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Dispatch verified release workflow
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run release.yml \
             --ref main \
-            -f version=v17.0.0-beta.1 \
+            -f version="$VERSION" \
             --repo "${{ github.repository }}"

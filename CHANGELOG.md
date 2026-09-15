@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — post beta.1
+## 17.0.0-beta.2 — 2026-09-15
 
 ### Added
 - `.ghostproject` project profiles with full non-secret project settings and Kotlin source persistence.
@@ -24,6 +24,15 @@
 - Project profiles recursively remove signing-password fields before writing files.
 - `keytool` passwords are passed through child-process environment variables instead of plain command-line arguments.
 
+### Validation
+- Python 3.11 / 3.12 / 3.13 quality matrix.
+- Windows standalone EXE smoke launch without system Python variables.
+- Real Android API 36 Debug APK build.
+- Isolated managed Build Engine Prepare/Repair gate.
+- Signed Release APK verification with `apksigner`.
+- Signed AAB validation with bundletool and `jarsigner`.
+- Full Portable Windows packaging gate.
+
 ### Tests
 - Project profile round-trip and secret-filter tests.
 - Recent Projects limit/deduplication tests.
@@ -34,6 +43,9 @@
 - Post-build size/summary formatting tests.
 - ADB device parsing, authorized/unauthorized device behavior and full physical-device command-flow tests.
 - Local physical-device PASS report persistence test.
+
+### Remaining stable gate
+- Run the built-in physical Android-device verification successfully on real user hardware before declaring stable `v17.0.0`.
 
 ## 17.0.0-beta.1 — 2026-09-15
 
