@@ -14,7 +14,7 @@
 
 ## Current status
 
-**v17.0.0-beta.1 — public beta**
+**v17.0.0-beta.2 — public beta**
 
 Ghost v17 is a ground-up replacement for the legacy v16.4 architecture. It generates a clean Android project from scratch, manages the build toolchain itself, and has passed the core beta release gates.
 
