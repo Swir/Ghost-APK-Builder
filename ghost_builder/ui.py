@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import queue
 from dataclasses import asdict
 from pathlib import Path
@@ -8,6 +9,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from . import ANDROID_API, APP_NAME, BUILD_TOOLS, VERSION
+from .build_history import BuildHistoryStore
 from .builder import GhostBuilder
 from .core import ConfigStore, Paths, ToolchainManager
 from .i18n import Translator, detect_system_language, normalize_language
@@ -30,7 +32,10 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         self.paths = Paths()
         self.store = ConfigStore(self.paths.config)
         self.recent_projects = RecentProjects(self.paths.root / "recent_projects.json", limit=8)
+        self.build_history = BuildHistoryStore(self.paths.root / "build_history.json", limit=50)
         self.current_project_path: Path | None = None
+        self._active_build_cfg = None
+        self._build_started_at = None
         saved = self.store.load()
         self.lang = normalize_language(saved.get("language") or detect_system_language())
         self.ui_mode = saved.get("ui_mode") if saved.get("ui_mode") in {"simple", "advanced"} else "simple"
@@ -117,12 +122,16 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         tools.pack(fill="x", padx=12, pady=10)
         self.profile_title = ctk.CTkLabel(tools, text_color=TEXT, font=ctk.CTkFont(size=16, weight="bold"))
         self.profile_title.pack(side="left", padx=16, pady=14)
-        self.profile_open_btn = ctk.CTkButton(tools, width=130, fg_color=CARD, command=self.open_project_profile)
+        self.profile_open_btn = ctk.CTkButton(tools, width=115, fg_color=CARD, command=self.open_project_profile)
         self.profile_open_btn.pack(side="right", padx=(6, 14), pady=10)
-        self.profile_save_btn = ctk.CTkButton(tools, width=130, fg_color=BLUE, command=self.save_project_profile)
+        self.profile_save_btn = ctk.CTkButton(tools, width=115, fg_color=BLUE, command=self.save_project_profile)
         self.profile_save_btn.pack(side="right", padx=6, pady=10)
-        self.play_check_btn = ctk.CTkButton(tools, width=160, fg_color=ACCENT, text_color="#04100e", command=self.show_play_readiness)
+        self.play_check_btn = ctk.CTkButton(tools, width=145, fg_color=ACCENT, text_color="#04100e", command=self.show_play_readiness)
         self.play_check_btn.pack(side="right", padx=6, pady=10)
+        self.history_btn = ctk.CTkButton(tools, width=115, fg_color=CARD, command=self.show_build_history)
+        self.history_btn.pack(side="right", padx=6, pady=10)
+        self.cert_btn = ctk.CTkButton(tools, width=115, fg_color=CARD, command=self.show_certificate_fingerprints)
+        self.cert_btn.pack(side="right", padx=6, pady=10)
 
         home_tab = self._tab("home")
         self.recent_box = ctk.CTkFrame(home_tab, fg_color=CARD, corner_radius=14)
@@ -136,9 +145,11 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
     def _refresh_productivity_labels(self) -> None:
         pl = self.lang == "pl"
         self.profile_title.configure(text="Profil projektu .ghostproject" if pl else "Project profile .ghostproject")
-        self.profile_open_btn.configure(text="Otwórz projekt" if pl else "Open project")
-        self.profile_save_btn.configure(text="Zapisz projekt" if pl else "Save project")
-        self.play_check_btn.configure(text="Gotowość Google Play" if pl else "Google Play readiness")
+        self.profile_open_btn.configure(text="Otwórz" if pl else "Open")
+        self.profile_save_btn.configure(text="Zapisz" if pl else "Save")
+        self.play_check_btn.configure(text="Gotowość Play" if pl else "Play readiness")
+        self.history_btn.configure(text="Historia" if pl else "History")
+        self.cert_btn.configure(text="Certyfikat" if pl else "Certificate")
         self.recent_title.configure(text="Ostatnie projekty" if pl else "Recent projects")
 
     def _apply_project_config(self, cfg) -> None:
@@ -195,6 +206,52 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
             ctk.CTkLabel(row, text=path.stem, text_color=TEXT, anchor="w").pack(side="left", fill="x", expand=True)
             ctk.CTkLabel(row, text=str(path.parent), text_color=MUTED, anchor="e").pack(side="left", padx=10)
             ctk.CTkButton(row, width=90, text="Otwórz" if self.lang == "pl" else "Open", fg_color=BLUE, command=lambda p=path: self.open_project_profile(p)).pack(side="right")
+
+    def show_build_history(self) -> None:
+        pl = self.lang == "pl"
+        win = ctk.CTkToplevel(self)
+        win.title("Historia buildów" if pl else "Build history")
+        win.geometry("900x560")
+        win.configure(fg_color=BG)
+        ctk.CTkLabel(win, text="Historia buildów" if pl else "Build history", text_color=TEXT, font=ctk.CTkFont(size=23, weight="bold")).pack(anchor="w", padx=22, pady=(20, 4))
+        ctk.CTkLabel(win, text="Ostatnie zweryfikowane artefakty APK/AAB" if pl else "Recent verified APK/AAB artifacts", text_color=MUTED).pack(anchor="w", padx=22, pady=(0, 12))
+        frame = ctk.CTkScrollableFrame(win, fg_color=SURFACE)
+        frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        items = self.build_history.load()
+        if not items:
+            ctk.CTkLabel(frame, text="Brak buildów w historii." if pl else "No builds in history yet.", text_color=MUTED).pack(anchor="w", padx=10, pady=12)
+            return
+        for item in items[:20]:
+            artifact = Path(item.get("artifact", ""))
+            row = ctk.CTkFrame(frame, fg_color=CARD, corner_radius=12)
+            row.pack(fill="x", padx=6, pady=5)
+            title = f"{item.get('app_name','Ghost App')}  v{item.get('version_name','?')}  •  {item.get('mode','?')} {item.get('format','?')}"
+            ctk.CTkLabel(row, text=title, text_color=TEXT, anchor="w", font=ctk.CTkFont(weight="bold")).pack(fill="x", padx=12, pady=(9,2))
+            meta = f"SHA-256: {item.get('sha256','')[:16]}…   •   {item.get('size_bytes',0)/1048576:.2f} MB   •   {item.get('duration_seconds','?')} s"
+            ctk.CTkLabel(row, text=meta, text_color=MUTED, anchor="w").pack(side="left", fill="x", expand=True, padx=12, pady=(0,9))
+            ctk.CTkButton(row, width=110, text="Otwórz folder" if pl else "Open folder", fg_color=BLUE, command=lambda p=artifact: self._open_artifact_folder(p)).pack(side="right", padx=10, pady=(0,9))
+
+    @staticmethod
+    def _open_artifact_folder(path: Path) -> None:
+        folder = path.parent if path.suffix else path
+        if folder.exists() and os.name == "nt":
+            os.startfile(str(folder))
+
+    def show_certificate_fingerprints(self) -> None:
+        pl = self.lang == "pl"
+        path = self.keystore.get().strip()
+        alias = self.alias.get().strip()
+        password = self.store_password.get()
+        if not path or not alias or not password:
+            messagebox.showwarning("Ghost APK Builder", "Ustaw keystore, alias i hasło sesji." if pl else "Set keystore, alias and the session password first.")
+            return
+        try:
+            found = self.builder.certificate_fingerprints(Path(path), password, alias)
+            text = f"SHA-1\n{found['SHA1']}\n\nSHA-256\n{found['SHA256']}"
+            self.clipboard_clear(); self.clipboard_append(found["SHA256"])
+            messagebox.showinfo("Certificate fingerprints", text + ("\n\nSHA-256 skopiowano do schowka." if pl else "\n\nSHA-256 copied to clipboard."))
+        except Exception as exc:
+            messagebox.showerror("Ghost APK Builder", str(exc))
 
     def show_play_readiness(self) -> None:
         report = check_play_readiness(self._config())
