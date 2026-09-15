@@ -6,6 +6,8 @@ from ghost_builder.core import ConfigStore, Paths, ToolchainManager
 from ghost_builder.generator import AndroidProjectGenerator, normalize_kotlin_source
 from ghost_builder.i18n import STRINGS, Translator, normalize_language
 from ghost_builder.model import ProjectConfig
+from ghost_builder.project_store import RecentProjects, load_project, save_project
+from ghost_builder.readiness import check_play_readiness
 class FoundationTests(unittest.TestCase):
     def test_version_profile(self):self.assertEqual(VERSION,"17.0.0-beta.1");self.assertEqual(ANDROID_API,36);self.assertEqual(BUILD_TOOLS,"36.0.0");self.assertEqual(GRADLE_VERSION,"9.6.0");self.assertEqual(AGP_VERSION,"9.4.0")
     def test_config_never_persists_passwords(self):
@@ -42,4 +44,23 @@ class FoundationTests(unittest.TestCase):
             with mock.patch.dict("os.environ",{"JAVA_HOME":str(fake),"GHOST_FORCE_MANAGED_TOOLCHAIN":"1"},clear=False):self.assertIsNone(toolchain.java_home())
     def test_paths_are_private_to_ghost(self):
         with tempfile.TemporaryDirectory() as td:p=Paths(td);self.assertEqual(p.root,Path(td));self.assertTrue(p.workspace.exists())
+    def test_project_profile_roundtrip_includes_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"demo.ghostproject";cfg=ProjectConfig(app_name="Profile Demo",package_name="com.swir.profile",custom_source="class MainActivity {}",metadata={"note":"ok"});save_project(path,cfg);loaded=load_project(path);self.assertEqual(loaded.app_name,"Profile Demo");self.assertEqual(loaded.custom_source,"class MainActivity {}");self.assertEqual(loaded.metadata.get("note"),"ok")
+    def test_project_profile_never_persists_secrets(self):
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"safe.ghostproject";cfg=ProjectConfig(metadata={"store_password":"hidden","nested":{"key_password":"hidden2","safe":"yes"}});save_project(path,cfg);raw=path.read_text(encoding="utf-8");self.assertNotIn("hidden",raw);self.assertNotIn("key_password",raw);self.assertIn("safe",raw)
+    def test_recent_projects_deduplicates_and_limits(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);paths=[]
+            for i in range(5):
+                p=root/f"{i}.ghostproject";save_project(p,ProjectConfig(app_name=f"P{i}"));paths.append(p)
+            recent=RecentProjects(root/"recent.json",limit=3)
+            for p in paths:recent.add(p)
+            recent.add(paths[-1]);items=recent.load();self.assertEqual(len(items),3);self.assertEqual(items[0],str(paths[-1]));self.assertEqual(len(items),len(set(items)))
+    def test_play_readiness_blocks_unsigned_debug(self):
+        report=check_play_readiness(ProjectConfig(build_mode="Debug",export_format="APK",signing_enabled=False,target_sdk=36));codes={x.code for x in report.errors};self.assertFalse(report.ready);self.assertIn("play_release_required",codes);self.assertIn("play_signing_required",codes)
+    def test_play_readiness_accepts_signed_release_aab(self):
+        with tempfile.TemporaryDirectory() as td:
+            key=Path(td)/"release.jks";key.write_text("placeholder",encoding="utf-8");icon=Path(td)/"icon.png";icon.write_bytes(b"png");cfg=ProjectConfig(build_mode="Release",export_format="AAB",signing_enabled=True,keystore_path=str(key),key_alias="ghost",icon_path=str(icon),target_sdk=36);report=check_play_readiness(cfg);self.assertTrue(report.ready);self.assertEqual(report.errors,())
 if __name__=="__main__":unittest.main()
