@@ -8,15 +8,15 @@
 
 ### Project progress
 
-`███████████████░░░░░ 75%`
+`████████████████░░░░ 82%`
 
 </div>
 
 ## Current status
 
-**v17.0.0-beta.1 — public beta candidate**
+**v17.0.0-beta.1 — public beta**
 
-Ghost v17 is a ground-up replacement for the legacy v16.4 architecture. It generates a clean Android project from scratch, manages the build toolchain itself, and has now passed the core beta release gates.
+Ghost v17 is a ground-up replacement for the legacy v16.4 architecture. It generates a clean Android project from scratch, manages the build toolchain itself, and has passed the core beta release gates.
 
 Verified beta gates include:
 - Windows standalone EXE build and smoke launch without a system Python runtime.
@@ -27,7 +27,7 @@ Verified beta gates include:
 - Verified Portable Windows package with JDK 21, Gradle 9.6 and bundletool 1.18.3.
 - Python 3.11 / 3.12 / 3.13 quality matrix.
 
-Stable v17.0.0 is **not** declared yet. It remains blocked on clean Windows 11 user testing and a physical Android-device test.
+Stable v17.0.0 is **not** declared yet. A physical Android-device install/build test remains one of the final stable gates.
 
 ## Language policy
 
@@ -42,6 +42,18 @@ GitHub documentation is maintained in **English**. The desktop app is bilingual:
 Ghost starts in **Simple** mode for a cleaner beginner workflow. Home and Project stay visible while technical Android, Kotlin, signing, Build Engine and diagnostic tabs are hidden.
 
 Switch to **Advanced** at any time to expose the full toolset. Ghost also opens Advanced mode automatically when a workflow requires an advanced screen. The preference is persisted.
+
+## Project profiles and Recent Projects
+
+Ghost now supports `.ghostproject` files. A project profile keeps the application settings and Kotlin source together so work can be reopened later without rebuilding the setup by hand.
+
+Signing passwords are deliberately excluded from project profiles. Recent Projects keeps a small deduplicated list of valid `.ghostproject` files and exposes quick reopen actions from Home.
+
+## Google Play readiness
+
+A dedicated readiness check evaluates the current project before Play submission. It checks the Android API profile, package/version data, Release mode, signing configuration, keystore/alias, output format, icon state and security-related warnings such as cleartext HTTP.
+
+The result is presented directly in Polish or English as **READY FOR GOOGLE PLAY / GOTOWE DLA GOOGLE PLAY** or as a concrete issue list to fix.
 
 ## Easy first-run workflow
 
@@ -61,6 +73,8 @@ Official Android SDK components are the licensing exception: Ghost provisions th
 - `ghost_builder/model.py` — project validation.
 - `ghost_builder/generator.py` — deterministic native Android project generation.
 - `ghost_builder/builder.py` — build, signing and artifact validation.
+- `ghost_builder/project_store.py` — `.ghostproject` persistence and Recent Projects.
+- `ghost_builder/readiness.py` — Google Play readiness report.
 - `ghost_builder/i18n.py` — Polish/English localization.
 - `ghost_builder/ui.py`, `ui_layout.py`, `ui_actions.py`, `ui_theme.py` — modular desktop UI.
 
