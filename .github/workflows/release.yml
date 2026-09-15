@@ -1,0 +1,46 @@
+name: Ghost v17 Release
+on:
+  pull_request:
+    paths: ["app.py", "ghost_builder/**", "requirements*.txt", "runtime_manifest.json", ".github/workflows/release.yml"]
+  workflow_dispatch:
+    inputs:
+      version: {description: Release tag, required: true, default: v17.0.0-dev.2}
+  push:
+    tags: ["v17.*"]
+permissions:
+  contents: read
+jobs:
+  package:
+    name: Build verified Windows package
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Test source
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-build.txt
+          python -m compileall -q app.py ghost_builder tests
+          python -m unittest discover -s tests -v
+      - run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --name "Ghost-APK-Builder" app.py
+      - name: Smoke-test standalone EXE
+        shell: pwsh
+        run: |
+          Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+          Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+          $p=Start-Process -FilePath "dist/Ghost-APK-Builder.exe" -ArgumentList "--smoke-test" -PassThru
+          if(-not $p.WaitForExit(20000)){Stop-Process -Id $p.Id -Force;throw "EXE smoke timeout"}
+          if($p.ExitCode -ne 0){throw "EXE smoke failed"}
+      - name: Package metadata gate
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force portable | Out-Null
+          Copy-Item dist/Ghost-APK-Builder.exe portable/Ghost-APK-Builder.exe
+          Copy-Item README.md,ROADMAP.md,CHANGELOG.md,SECURITY.md,THIRD_PARTY_NOTICES.md,runtime_manifest.json portable/
+          Compress-Archive -Path portable/* -DestinationPath Ghost-APK-Builder-v17-ci-Portable.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ghost-v17-release-package
+          path: Ghost-APK-Builder-v17-ci-Portable.zip
