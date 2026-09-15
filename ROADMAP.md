@@ -2,9 +2,9 @@
 
 This roadmap is the source of truth for v17 development.
 
-## Overall progress — 88%
+## Overall progress — 92%
 
-`██████████████████░░ 88%`
+`██████████████████░░ 92%`
 
 The percentage reflects real milestone and release-gate completion rather than CI volume alone.
 
@@ -50,7 +50,8 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] Recent Projects list with quick reopen.
 - [x] Persistent Build History with artifact SHA-256, size, duration, mode and signing state.
 - [x] Build-history artifact folder shortcut.
-- [ ] Accessibility polish and richer post-build result panel.
+- [x] Rich post-build result panel with file/folder/path/SHA-256 actions and APK ADB install shortcut.
+- [x] Basic accessibility polish for the result flow: keyboard focus and Escape-to-close behavior.
 
 ## M5 — Zero-install Windows release 🚧
 - [x] Standalone EXE and Portable workflow definitions.

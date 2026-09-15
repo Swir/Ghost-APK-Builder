@@ -8,7 +8,7 @@
 
 ### Project progress
 
-`██████████████████░░ 88%`
+`██████████████████░░ 92%`
 
 </div>
 
@@ -61,6 +61,20 @@ Successful builds are recorded locally with artifact path, application/version d
 
 No signing password is stored in Build History.
 
+## Rich post-build result
+
+After a successful build, Ghost now opens a dedicated bilingual result panel instead of a basic message box. It shows the artifact name, size, build duration, signing state and SHA-256 checksum.
+
+From the same panel users can:
+- open the generated APK/AAB,
+- open its folder,
+- copy the full artifact path,
+- copy the SHA-256 checksum,
+- install and launch an APK through ADB when a device is connected,
+- jump back to Build History for AAB workflows.
+
+The result panel includes keyboard focus and Escape-to-close behavior for a cleaner keyboard workflow.
+
 ## Certificate fingerprints
 
 Ghost can read SHA-1 and SHA-256 fingerprints from the selected signing certificate directly from the UI. SHA-256 is copied to the clipboard for easy Firebase / API configuration workflows.
@@ -89,6 +103,7 @@ Official Android SDK components are the licensing exception: Ghost provisions th
 - `ghost_builder/readiness.py` — Google Play readiness report.
 - `ghost_builder/build_history.py` — local artifact history and SHA-256 metadata.
 - `ghost_builder/certificates.py` — certificate fingerprint parsing.
+- `ghost_builder/ui_result.py` — rich post-build result workflow.
 - `ghost_builder/i18n.py` — Polish/English localization.
 - `ghost_builder/ui.py`, `ui_layout.py`, `ui_actions.py`, `ui_theme.py` — modular desktop UI.
 
