@@ -57,6 +57,49 @@ class GhostApp(LayoutMixin, ActionsMixin, ctk.CTk):
         self._translated.append((widget, key, kwargs))
         return widget
 
+    def _mode_labels(self):
+        return ("Prosty", "Zaawansowany") if self.lang == "pl" else ("Simple", "Advanced")
+
+    def _apply_ui_mode(self, mode: str, persist: bool = True) -> None:
+        self.ui_mode = "advanced" if mode == "advanced" else "simple"
+        simple_label, advanced_label = self._mode_labels()
+        self.mode_switch.configure(values=[simple_label, advanced_label])
+        self.ui_mode_var.set(simple_label if self.ui_mode == "simple" else advanced_label)
+        visible_keys = self.TABS if self.ui_mode == "advanced" else self.SIMPLE_TABS
+        visible_names = [self._tab_names[key] for key in visible_keys]
+        self.tabs._segmented_button.configure(values=visible_names)
+        try:
+            current = self.tabs.get()
+        except Exception:
+            current = ""
+        if current not in visible_names:
+            self.tabs.set(self._tab_names["home"])
+        if persist:
+            data = self.store.load()
+            data["ui_mode"] = self.ui_mode
+            data["language"] = self.lang
+            self.store.save(data)
+            self._append_log("info", f"UI mode: {self.ui_mode}")
+
+    def _switch_ui_mode(self, value: str) -> None:
+        simple_label, _ = self._mode_labels()
+        self._apply_ui_mode("simple" if value == simple_label else "advanced", persist=True)
+
+    def _go_tab(self, key):
+        if self.ui_mode == "simple" and key not in self.SIMPLE_TABS:
+            self._apply_ui_mode("advanced", persist=True)
+        self.tabs.set(self._tab_names[key])
+
+    def _switch_language(self, value):
+        ActionsMixin._switch_language(self, value)
+        self._apply_ui_mode(self.ui_mode, persist=False)
+
+    def save_config(self, quiet=False):
+        ActionsMixin.save_config(self, quiet=quiet)
+        data = self.store.load()
+        data["ui_mode"] = self.ui_mode
+        self.store.save(data)
+
     def _build_ui(self) -> None:
         head = ctk.CTkFrame(self, fg_color=BG)
         head.pack(fill="x", padx=26, pady=(18, 8))
