@@ -4,6 +4,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from . import ANDROID_API
 from .model import ProjectConfig
+from .ui_result import BuildResultMixin
 from .ui_theme import ACCENT, CARD, MUTED, SUCCESS, TEXT, WARNING
 
 class ActionsMixin:
@@ -41,14 +42,19 @@ class ActionsMixin:
                 elif level=="__engine_done__":self._set_busy(False);self.refresh_engine_status()
                 elif level=="__build_success__":
                     self.progress.set(1);self._set_busy(False);self._append_log("success",msg)
+                    cfg=self._active_build_cfg
+                    item=None
                     try:
-                        if self._active_build_cfg is not None:
+                        if cfg is not None:
                             elapsed=time.monotonic()-self._build_started_at if self._build_started_at is not None else None
-                            item=self.build_history.record(Path(msg),self._active_build_cfg,elapsed)
+                            item=self.build_history.record(Path(msg),cfg,elapsed)
                             self._append_log("info",f"History: {item['sha256'][:16]}… {item['size_bytes']} bytes")
                     except Exception as exc:self._append_log("warning",f"Build history: {exc}")
                     finally:self._active_build_cfg=None;self._build_started_at=None
-                    messagebox.showinfo(self.t("msg.build_complete_title"),self.t("msg.build_complete",path=msg))
+                    if item is not None and cfg is not None:
+                        BuildResultMixin.show_build_result(self,item,cfg)
+                    else:
+                        messagebox.showinfo(self.t("msg.build_complete_title"),self.t("msg.build_complete",path=msg))
                 elif level=="__build_error__":self.progress.set(0);self._set_busy(False);self._active_build_cfg=None;self._build_started_at=None;self._append_log("error",msg);messagebox.showerror(self.t("msg.build_failed"),msg)
                 else:self._append_log(level,msg)
         except queue.Empty:pass
