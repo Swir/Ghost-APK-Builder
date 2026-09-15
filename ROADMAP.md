@@ -2,9 +2,9 @@
 
 This roadmap is the source of truth for v17 development.
 
-## Overall progress — 75%
+## Overall progress — 82%
 
-`███████████████░░░░░ 75%`
+`████████████████░░░░ 82%`
 
 The percentage reflects real milestone and release-gate completion rather than CI volume alone.
 
@@ -34,7 +34,8 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] Session-only signing secrets and managed keytool.
 - [x] APK/AAB validation paths.
 - [x] Ephemeral signed Release APK/AAB CI gate.
-- [ ] Play readiness report and certificate fingerprints.
+- [x] Google Play readiness report for package/API/version/signing/icon/output/security checks.
+- [ ] Certificate fingerprints and richer Play readiness export.
 
 ## M4 — Desktop UI 🚧
 - [x] Modern Ghost dark UI and modular UI code.
@@ -43,7 +44,8 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] PL system detection, English fallback and persisted PL/EN switch.
 - [x] Thread-safe worker queue and diagnostic logs.
 - [x] Simple / Advanced mode with persisted preference.
-- [ ] Recent projects/profiles and `.ghostproject` files.
+- [x] `.ghostproject` project profiles with Kotlin source persistence and secret filtering.
+- [x] Recent Projects list with quick reopen.
 - [ ] Build history, artifact shortcuts and accessibility polish.
 
 ## M5 — Zero-install Windows release 🚧
@@ -54,8 +56,8 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] Isolated managed-engine gate green.
 - [x] Full Portable package gate with JDK/Gradle/bundletool green.
 - [x] Signed Release APK/AAB validation gate green.
-- [ ] Publish `v17.0.0-beta.1`.
-- [ ] Clean Windows 11 user test.
+- [x] Publish `v17.0.0-beta.1`.
+- [x] Clean Windows 11 user test reported successful.
 - [ ] Physical Android-device install/build test.
 - [ ] Stable v17.0.0.
 
