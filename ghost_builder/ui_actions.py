@@ -1,4 +1,4 @@
-import datetime, queue, secrets, string, threading
+import datetime, queue, secrets, string, threading, time
 from pathlib import Path
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
@@ -39,8 +39,17 @@ class ActionsMixin:
                     try:self.progress.set(max(0,min(1,int(msg.rsplit(":",1)[1])/100)))
                     except ValueError:pass
                 elif level=="__engine_done__":self._set_busy(False);self.refresh_engine_status()
-                elif level=="__build_success__":self.progress.set(1);self._set_busy(False);self._append_log("success",msg);messagebox.showinfo(self.t("msg.build_complete_title"),self.t("msg.build_complete",path=msg))
-                elif level=="__build_error__":self.progress.set(0);self._set_busy(False);self._append_log("error",msg);messagebox.showerror(self.t("msg.build_failed"),msg)
+                elif level=="__build_success__":
+                    self.progress.set(1);self._set_busy(False);self._append_log("success",msg)
+                    try:
+                        if self._active_build_cfg is not None:
+                            elapsed=time.monotonic()-self._build_started_at if self._build_started_at is not None else None
+                            item=self.build_history.record(Path(msg),self._active_build_cfg,elapsed)
+                            self._append_log("info",f"History: {item['sha256'][:16]}… {item['size_bytes']} bytes")
+                    except Exception as exc:self._append_log("warning",f"Build history: {exc}")
+                    finally:self._active_build_cfg=None;self._build_started_at=None
+                    messagebox.showinfo(self.t("msg.build_complete_title"),self.t("msg.build_complete",path=msg))
+                elif level=="__build_error__":self.progress.set(0);self._set_busy(False);self._active_build_cfg=None;self._build_started_at=None;self._append_log("error",msg);messagebox.showerror(self.t("msg.build_failed"),msg)
                 else:self._append_log(level,msg)
         except queue.Empty:pass
         self.after(80,self._drain_events)
@@ -107,7 +116,7 @@ class ActionsMixin:
         if errors:self.home_project_status.configure(text=self.t("home.project_errors",count=len(errors)),text_color=WARNING,fg_color="#221d12");messagebox.showerror(self.t("msg.cannot_build"),"\n\n".join(errors));self._go_tab("project");return
         self.home_project_status.configure(text=self.t("home.project_ready"),text_color=SUCCESS,fg_color="#10211d")
         if not self.toolchain.ready():messagebox.showwarning(self.t("tab.engine"),self.t("msg.engine_not_ready"));self._go_tab("engine");return
-        store_pw,key_pw=self.store_password.get(),self.key_password.get();self.save_config(quiet=True);self.progress.set(.08);self._set_busy(True,"busy.building");self._go_tab("logs")
+        store_pw,key_pw=self.store_password.get(),self.key_password.get();self.save_config(quiet=True);self.progress.set(.08);self._set_busy(True,"busy.building");self._go_tab("logs");self._active_build_cfg=cfg;self._build_started_at=time.monotonic()
         def worker():
             try:self.events.put(("__build_success__",str(self.builder.build(cfg,store_pw,key_pw))))
             except Exception as exc:self.events.put(("__build_error__",str(exc)))

@@ -8,7 +8,7 @@
 
 ### Project progress
 
-`████████████████░░░░ 82%`
+`██████████████████░░ 88%`
 
 </div>
 
@@ -45,7 +45,7 @@ Switch to **Advanced** at any time to expose the full toolset. Ghost also opens 
 
 ## Project profiles and Recent Projects
 
-Ghost now supports `.ghostproject` files. A project profile keeps the application settings and Kotlin source together so work can be reopened later without rebuilding the setup by hand.
+Ghost supports `.ghostproject` files. A project profile keeps application settings and Kotlin source together so work can be reopened later without rebuilding the setup by hand.
 
 Signing passwords are deliberately excluded from project profiles. Recent Projects keeps a small deduplicated list of valid `.ghostproject` files and exposes quick reopen actions from Home.
 
@@ -54,6 +54,18 @@ Signing passwords are deliberately excluded from project profiles. Recent Projec
 A dedicated readiness check evaluates the current project before Play submission. It checks the Android API profile, package/version data, Release mode, signing configuration, keystore/alias, output format, icon state and security-related warnings such as cleartext HTTP.
 
 The result is presented directly in Polish or English as **READY FOR GOOGLE PLAY / GOTOWE DLA GOOGLE PLAY** or as a concrete issue list to fix.
+
+## Build History
+
+Successful builds are recorded locally with artifact path, application/version data, APK/AAB type, Debug/Release mode, signing state, file size, build duration and SHA-256 digest. The History window provides quick access to recent artifacts and their containing folders.
+
+No signing password is stored in Build History.
+
+## Certificate fingerprints
+
+Ghost can read SHA-1 and SHA-256 fingerprints from the selected signing certificate directly from the UI. SHA-256 is copied to the clipboard for easy Firebase / API configuration workflows.
+
+`keytool` passwords are no longer passed as plain process arguments; they are supplied through the child-process environment for the current session only.
 
 ## Easy first-run workflow
 
@@ -75,12 +87,14 @@ Official Android SDK components are the licensing exception: Ghost provisions th
 - `ghost_builder/builder.py` — build, signing and artifact validation.
 - `ghost_builder/project_store.py` — `.ghostproject` persistence and Recent Projects.
 - `ghost_builder/readiness.py` — Google Play readiness report.
+- `ghost_builder/build_history.py` — local artifact history and SHA-256 metadata.
+- `ghost_builder/certificates.py` — certificate fingerprint parsing.
 - `ghost_builder/i18n.py` — Polish/English localization.
 - `ghost_builder/ui.py`, `ui_layout.py`, `ui_actions.py`, `ui_theme.py` — modular desktop UI.
 
 ## Safety
 
-Ghost v17 does not globally terminate Java, modify unrelated development tools or persist signing passwords. Signing secrets exist only for the current session and are passed to Gradle through process environment variables.
+Ghost v17 does not globally terminate Java, modify unrelated development tools or persist signing passwords. Signing secrets exist only for the current session and are passed through child-process environment variables when required.
 
 ## Development plan
 
