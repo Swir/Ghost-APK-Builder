@@ -6,15 +6,22 @@
 - `.ghostproject` project profiles with full non-secret project settings and Kotlin source persistence.
 - Recent Projects list with deduplication, missing-file cleanup and quick reopen actions.
 - Google Play readiness report covering API target, package/version data, Release mode, AAB suitability, signing, keystore/alias, icon state, cleartext HTTP and backup warnings.
-- Polish/English UI actions for profiles, recent projects and Play readiness.
+- Persistent Build History with artifact path, version, APK/AAB type, build mode, signing state, size, duration and SHA-256.
+- Build History UI with quick artifact-folder access.
+- SHA-1 / SHA-256 signing-certificate fingerprint viewer with SHA-256 clipboard copy.
+- Polish/English UI actions for profiles, recent projects, Play readiness, build history and certificate inspection.
 
 ### Security
 - Project profiles recursively remove signing-password fields before writing files.
+- `keytool` passwords are passed through child-process environment variables instead of plain command-line arguments.
 
 ### Tests
 - Project profile round-trip and secret-filter tests.
 - Recent Projects limit/deduplication tests.
 - Google Play readiness fail/pass scenarios.
+- Build History metadata/SHA-256 test.
+- Certificate fingerprint parser test.
+- Regression test proving generated `keytool` process arguments do not contain the signing password.
 
 ## 17.0.0-beta.1 — 2026-09-15
 
