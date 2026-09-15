@@ -1,5 +1,5 @@
 APP_NAME = "Ghost APK Builder"
-VERSION = "17.0.0-dev.2"
+VERSION = "17.0.0-beta.1"
 ANDROID_API = 36
 BUILD_TOOLS = "36.0.0"
 AGP_VERSION = "9.4.0"
