@@ -8,7 +8,7 @@
 
 ### Project progress
 
-`██████████████████░░ 92%`
+`███████████████████░ 94%`
 
 </div>
 
@@ -27,7 +27,7 @@ Verified beta gates include:
 - Verified Portable Windows package with JDK 21, Gradle 9.6 and bundletool 1.18.3.
 - Python 3.11 / 3.12 / 3.13 quality matrix.
 
-Stable v17.0.0 is **not** declared yet. A physical Android-device install/build test remains one of the final stable gates.
+Stable v17.0.0 is **not** declared yet. The remaining release gate is a successful physical-device verification on real user hardware.
 
 ## Language policy
 
@@ -63,17 +63,29 @@ No signing password is stored in Build History.
 
 ## Rich post-build result
 
-After a successful build, Ghost now opens a dedicated bilingual result panel instead of a basic message box. It shows the artifact name, size, build duration, signing state and SHA-256 checksum.
+After a successful build, Ghost opens a dedicated bilingual result panel instead of a basic message box. It shows the artifact name, size, build duration, signing state and SHA-256 checksum.
 
 From the same panel users can:
 - open the generated APK/AAB,
 - open its folder,
 - copy the full artifact path,
 - copy the SHA-256 checksum,
-- install and launch an APK through ADB when a device is connected,
+- start the physical Android-device verification for APK artifacts,
 - jump back to Build History for AAB workflows.
 
 The result panel includes keyboard focus and Escape-to-close behavior for a cleaner keyboard workflow.
+
+## Physical Android-device verification
+
+Ghost includes a one-click device gate for generated APK files. It uses the managed ADB toolchain and performs the complete verification flow:
+1. start/check the ADB server,
+2. require exactly one authorized Android device,
+3. install the APK with `adb install -r`,
+4. verify the installed package with `pm path`,
+5. launch the generated activity with `am start -W`,
+6. save a local `device_test_last.json` PASS report.
+
+Unauthorized/offline devices produce an actionable error instead of a false success. The roadmap does **not** mark the physical-device gate complete until this flow is actually run successfully on real hardware.
 
 ## Certificate fingerprints
 
@@ -103,6 +115,7 @@ Official Android SDK components are the licensing exception: Ghost provisions th
 - `ghost_builder/readiness.py` — Google Play readiness report.
 - `ghost_builder/build_history.py` — local artifact history and SHA-256 metadata.
 - `ghost_builder/certificates.py` — certificate fingerprint parsing.
+- `ghost_builder/device_test.py` — physical Android-device verification and PASS report.
 - `ghost_builder/ui_result.py` — rich post-build result workflow.
 - `ghost_builder/i18n.py` — Polish/English localization.
 - `ghost_builder/ui.py`, `ui_layout.py`, `ui_actions.py`, `ui_theme.py` — modular desktop UI.
