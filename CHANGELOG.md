@@ -11,12 +11,14 @@
 - SHA-1 / SHA-256 signing-certificate fingerprint viewer with SHA-256 clipboard copy.
 - Rich bilingual post-build result panel with artifact metadata and direct actions.
 - Post-build Open file, Open folder, Copy path and Copy SHA-256 actions.
-- One-click ADB install/launch action for generated APK artifacts.
-- Polish/English UI actions for profiles, recent projects, Play readiness, build history, certificate inspection and build results.
+- One-click physical Android-device verification for generated APK files.
+- Physical-device PASS report saved locally as `device_test_last.json`.
+- Polish/English UI actions for profiles, recent projects, Play readiness, build history, certificate inspection, build results and device testing.
 
 ### Improved
 - Successful builds now open a focused result workflow instead of a basic completion message box.
 - Result windows support keyboard focus and Escape-to-close behavior.
+- APK device testing now verifies ADB authorization, installation, installed package presence and activity launch instead of treating `adb install` alone as sufficient proof.
 
 ### Security
 - Project profiles recursively remove signing-password fields before writing files.
@@ -30,6 +32,8 @@
 - Certificate fingerprint parser test.
 - Regression test proving generated `keytool` process arguments do not contain the signing password.
 - Post-build size/summary formatting tests.
+- ADB device parsing, authorized/unauthorized device behavior and full physical-device command-flow tests.
+- Local physical-device PASS report persistence test.
 
 ## 17.0.0-beta.1 — 2026-09-15
 
