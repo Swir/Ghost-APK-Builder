@@ -2,6 +2,8 @@ import json, tempfile, unittest
 from unittest import mock
 from pathlib import Path
 from ghost_builder import ANDROID_API, AGP_VERSION, BUILD_TOOLS, GRADLE_VERSION, VERSION
+from ghost_builder.build_history import BuildHistoryStore
+from ghost_builder.certificates import parse_keytool_fingerprints
 from ghost_builder.core import ConfigStore, Paths, ToolchainManager
 from ghost_builder.generator import AndroidProjectGenerator, normalize_kotlin_source
 from ghost_builder.i18n import STRINGS, Translator, normalize_language
@@ -63,4 +65,9 @@ class FoundationTests(unittest.TestCase):
     def test_play_readiness_accepts_signed_release_aab(self):
         with tempfile.TemporaryDirectory() as td:
             key=Path(td)/"release.jks";key.write_text("placeholder",encoding="utf-8");icon=Path(td)/"icon.png";icon.write_bytes(b"png");cfg=ProjectConfig(build_mode="Release",export_format="AAB",signing_enabled=True,keystore_path=str(key),key_alias="ghost",icon_path=str(icon),target_sdk=36);report=check_play_readiness(cfg);self.assertTrue(report.ready);self.assertEqual(report.errors,())
+    def test_build_history_records_artifact_metadata(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);artifact=root/"demo.apk";artifact.write_bytes(b"ghost-apk");store=BuildHistoryStore(root/"history.json",limit=5);item=store.record(artifact,ProjectConfig(app_name="Demo",package_name="com.swir.demo",version_name="2.1",version_code=7,export_format="APK",build_mode="Release",signing_enabled=True),12.345);self.assertEqual(item["app_name"],"Demo");self.assertTrue(item["signed"]);self.assertEqual(item["duration_seconds"],12.35);self.assertEqual(len(item["sha256"]),64);self.assertEqual(store.load()[0]["artifact"],str(artifact.resolve()))
+    def test_certificate_fingerprint_parser(self):
+        text="Certificate fingerprints:\n\t SHA1: AA:BB:CC:DD\n\t SHA256: 11:22:33:44:55\n";found=parse_keytool_fingerprints(text);self.assertEqual(found["SHA1"],"AA:BB:CC:DD");self.assertEqual(found["SHA256"],"11:22:33:44:55")
 if __name__=="__main__":unittest.main()
