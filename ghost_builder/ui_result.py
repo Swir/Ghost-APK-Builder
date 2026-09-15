@@ -7,6 +7,7 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
+from .device_test import PhysicalDeviceVerifier, save_device_test_report
 from .ui_theme import ACCENT, BG, BLUE, CARD, MUTED, SUCCESS, SURFACE, TEXT
 
 
@@ -52,19 +53,29 @@ class BuildResultMixin:
         if folder.exists() and os.name == "nt":
             os.startfile(str(folder))
 
-    def _install_result_apk(self, path: Path, cfg, button) -> None:
+    def _verify_result_apk(self, path: Path, cfg, button) -> None:
         pl = self.lang == "pl"
-        button.configure(state="disabled", text="Instalowanie…" if pl else "Installing…")
+        idle = "Test telefonu" if pl else "Device test"
+        button.configure(state="disabled", text="Testowanie…" if pl else "Testing…")
 
         def worker():
             try:
                 activity = ".SplashActivity" if cfg.use_splash else ".MainActivity"
-                self.builder.deploy_to_connected_device(path, cfg.package_name, activity)
-                self.after(0, lambda: messagebox.showinfo("ADB", "APK zainstalowany i uruchomiony." if pl else "APK installed and launched."))
+                report = PhysicalDeviceVerifier(self.toolchain).run(path, cfg.package_name, activity)
+                report_path = save_device_test_report(self.paths.root / "device_test_last.json", report)
+                self._append_log("success", f"Physical device PASS: {report.serial} / {report.package_name}")
+                self._append_log("info", f"Device test report: {report_path}")
+                text = (
+                    f"TEST TELEFONU: PASS\n\nUrządzenie: {report.serial}\nPakiet: {report.package_name}\nAPK zainstalowane, pakiet potwierdzony i aplikacja uruchomiona.\n\nRaport:\n{report_path}"
+                    if pl else
+                    f"PHYSICAL DEVICE TEST: PASS\n\nDevice: {report.serial}\nPackage: {report.package_name}\nAPK installed, package verified and app launched.\n\nReport:\n{report_path}"
+                )
+                self.after(0, lambda: messagebox.showinfo("Ghost Device Test", text))
             except Exception as exc:
-                self.after(0, lambda: messagebox.showerror("ADB", str(exc)))
+                self._append_log("error", f"Physical device test: {exc}")
+                self.after(0, lambda: messagebox.showerror("Ghost Device Test", str(exc)))
             finally:
-                self.after(0, lambda: button.configure(state="normal", text="Zainstaluj przez ADB" if pl else "Install via ADB"))
+                self.after(0, lambda: button.configure(state="normal", text=idle))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -143,13 +154,13 @@ class BuildResultMixin:
         ).pack(side="left", fill="x", expand=True, padx=(0, 5))
 
         if cfg.export_format == "APK":
-            adb_btn = ctk.CTkButton(
+            device_btn = ctk.CTkButton(
                 second,
-                text="Zainstaluj przez ADB" if pl else "Install via ADB",
+                text="Test telefonu" if pl else "Device test",
                 fg_color=BLUE,
             )
-            adb_btn.configure(command=lambda: BuildResultMixin._install_result_apk(self, artifact, cfg, adb_btn))
-            adb_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
+            device_btn.configure(command=lambda: BuildResultMixin._verify_result_apk(self, artifact, cfg, device_btn))
+            device_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
         else:
             ctk.CTkButton(
                 second,
