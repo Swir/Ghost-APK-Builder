@@ -5,6 +5,7 @@ on:
     paths:
       - "app.py"
       - "ghost_builder/**"
+      - "assets/**"
       - "requirements*.txt"
       - "runtime_manifest.json"
       - ".github/workflows/release.yml"
@@ -52,9 +53,15 @@ jobs:
           python -m pip install -r requirements-build.txt
           python -m compileall -q app.py ghost_builder tests
           python -m unittest discover -s tests -v
+      - name: Materialize branded Ghost icon
+        shell: pwsh
+        run: |
+          $raw = (Get-Content "assets/ghost_icon.ico.b64" -Raw).Trim()
+          [IO.File]::WriteAllBytes("assets/ghost_icon.ico", [Convert]::FromBase64String($raw))
+          if (-not (Test-Path "assets/ghost_icon.ico")) { throw "Ghost icon materialization failed" }
       - name: Build standalone EXE
         shell: pwsh
-        run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --name "Ghost-APK-Builder" app.py
+        run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --icon "assets/ghost_icon.ico" --name "Ghost-APK-Builder" app.py
       - name: Smoke-test standalone EXE
         shell: pwsh
         run: |
@@ -69,6 +76,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path portable/runtime,portable/licenses | Out-Null
           Copy-Item dist/Ghost-APK-Builder.exe portable/Ghost-APK-Builder.exe
+          Copy-Item assets/ghost_icon.ico portable/Ghost-APK-Builder.ico
           Copy-Item README.md,ROADMAP.md,CHANGELOG.md,SECURITY.md,THIRD_PARTY_NOTICES.md,MIGRATION_V16_TO_V17.md,AUDIT_V16_4.md,CONTRIBUTING.md,runtime_manifest.json portable/
           Copy-Item docs portable/docs -Recurse
 
@@ -155,6 +163,6 @@ jobs:
         run: |
           set -euo pipefail
           cd release-assets
-          NOTES="Ghost APK Builder ${VERSION}. Bilingual PL/EN Windows app, standalone EXE and verified Portable package with JDK 21, Gradle 9.6.0 and bundletool 1.18.3. Android SDK is provisioned by Ghost after explicit SDK-license acceptance and is not redistributed in the archive."
+          NOTES="Ghost APK Builder ${VERSION}. Bilingual PL/EN Windows app with official Ghost branding, standalone EXE and verified Portable package with JDK 21, Gradle 9.6.0 and bundletool 1.18.3. Android SDK remains subject to Google's SDK license and is not redistributed in the public archive."
           if [[ "$VERSION" == *-* ]]; then PRE="--prerelease"; else PRE=""; fi
           gh release create "$VERSION" Ghost-APK-Builder-* --target "${{ github.sha }}" --title "Ghost APK Builder $VERSION" --notes "$NOTES" $PRE --repo "${{ github.repository }}"
