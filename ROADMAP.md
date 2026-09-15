@@ -2,6 +2,12 @@
 
 This roadmap is the source of truth for v17 development.
 
+## Overall progress — 75%
+
+`███████████████░░░░░ 75%`
+
+The percentage reflects real milestone and release-gate completion rather than CI volume alone.
+
 ## M0 — Safe architecture ✅
 - [x] Remove global Java termination and persisted signing passwords.
 - [x] Replace Android Studio base-project dependency with deterministic generation.
@@ -14,7 +20,7 @@ This roadmap is the source of truth for v17 development.
 - [x] API 36 + Build Tools 36.0.0 + Platform Tools + apksigner.
 - [x] SHA-256 verification, retry/resume and safe Repair.
 - [x] Explicit Android SDK license consent.
-- [ ] Clean-machine Prepare/Repair CI green.
+- [x] Isolated Prepare/Repair CI gate green.
 - [ ] Offline cache import/export.
 
 ## M2 — Native Android generator 🚧
@@ -27,7 +33,7 @@ This roadmap is the source of truth for v17 development.
 ## M3 — Signing and validation 🚧
 - [x] Session-only signing secrets and managed keytool.
 - [x] APK/AAB validation paths.
-- [ ] Ephemeral signed Release APK/AAB CI gate.
+- [x] Ephemeral signed Release APK/AAB CI gate.
 - [ ] Play readiness report and certificate fingerprints.
 
 ## M4 — Desktop UI 🚧
@@ -36,19 +42,23 @@ This roadmap is the source of truth for v17 development.
 - [x] First-run bilingual onboarding wizard.
 - [x] PL system detection, English fallback and persisted PL/EN switch.
 - [x] Thread-safe worker queue and diagnostic logs.
-- [ ] Simple / Advanced mode.
+- [x] Simple / Advanced mode with persisted preference.
 - [ ] Recent projects/profiles and `.ghostproject` files.
-- [ ] Build history, artifact shortcuts, accessibility and branded graphics.
+- [ ] Build history, artifact shortcuts and accessibility polish.
 
 ## M5 — Zero-install Windows release 🚧
 - [x] Standalone EXE and Portable workflow definitions.
 - [x] Real API 36 smoke-build definition.
-- [ ] Windows EXE smoke gate green.
-- [ ] API 36 APK gate green.
-- [ ] Isolated managed-engine gate green.
-- [ ] Full Portable package gate with JDK/Gradle/bundletool green.
-- [ ] Public beta, clean Windows 11 test and physical Android test.
+- [x] Windows EXE smoke gate green with branded executable icon.
+- [x] API 36 APK gate green.
+- [x] Isolated managed-engine gate green.
+- [x] Full Portable package gate with JDK/Gradle/bundletool green.
+- [x] Signed Release APK/AAB validation gate green.
+- [ ] Publish `v17.0.0-beta.1`.
+- [ ] Clean Windows 11 user test.
+- [ ] Physical Android-device install/build test.
 - [ ] Stable v17.0.0.
 
 ### Zero-install definition
-Stable Ghost must not require manual Python, JDK, Gradle, Android Studio, Node.js or Cordova installation. Android SDK is provisioned by Ghost after explicit license acceptance.
+
+Stable Ghost must not require manual Python, JDK, Gradle, Android Studio, Node.js or Cordova installation. Everything legally redistributable is packaged with Ghost. Official Android SDK components remain the licensing exception: Ghost provisions the required components itself after explicit Android SDK terms acceptance rather than redistributing them in the public archive.

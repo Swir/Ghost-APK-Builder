@@ -1,0 +1,143 @@
+name: Ghost v17 Signed Release Gate
+
+on:
+  pull_request:
+    paths:
+      - "ghost_builder/**"
+      - "tests/**"
+      - ".github/workflows/signed-release.yml"
+  push:
+    branches:
+      - main
+      - "v17-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-release:
+    name: Signed Release APK and AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Resolve Android SDK tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "APKSIGNER=$ANDROID_HOME/build-tools/36.0.0/apksigner" >> "$GITHUB_ENV"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+      - name: Download and verify bundletool 1.18.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o bundletool.jar "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  bundletool.jar" | sha256sum -c -
+      - name: Generate ephemeral signing keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          echo "::add-mask::$PASSWORD"
+          keytool -genkeypair -v \
+            -keystore "$RUNNER_TEMP/ghost-ci-release.jks" \
+            -alias ghost_ci \
+            -keyalg RSA \
+            -keysize 3072 \
+            -validity 10000 \
+            -storepass "$PASSWORD" \
+            -keypass "$PASSWORD" \
+            -dname "CN=Ghost CI, OU=Release Gate, O=Swir, L=CI, ST=CI, C=NO"
+          echo "GHOST_STORE_FILE=$RUNNER_TEMP/ghost-ci-release.jks" >> "$GITHUB_ENV"
+          echo "GHOST_STORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+          echo "GHOST_KEY_ALIAS=ghost_ci" >> "$GITHUB_ENV"
+          echo "GHOST_KEY_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
+      - name: Generate signed Release project
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from ghost_builder.generator import AndroidProjectGenerator
+          from ghost_builder.model import ProjectConfig
+
+          keystore = os.environ["GHOST_STORE_FILE"]
+          cfg = ProjectConfig(
+              app_name="Ghost Signed CI",
+              package_name="com.swir.ghostsignedci",
+              version_name="17.0.0-ci",
+              version_code=170000,
+              min_sdk=24,
+              target_sdk=36,
+              build_mode="Release",
+              export_format="APK",
+              signing_enabled=True,
+              keystore_path=keystore,
+              key_alias="ghost_ci",
+              permission_camera=True,
+              permission_microphone=True,
+              output_dir="out",
+          )
+          AndroidProjectGenerator().generate(Path("signed-project"), cfg)
+          PY
+      - name: Prove signing secrets are not persisted
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -F --exclude-dir=build --exclude='*.jks' "$GHOST_STORE_PASSWORD" signed-project; then
+            echo "Signing password leaked into generated project files"
+            exit 1
+          fi
+          grep -R -F 'System.getenv("GHOST_STORE_PASSWORD")' signed-project/app/build.gradle.kts
+          grep -R -F 'System.getenv("GHOST_KEY_PASSWORD")' signed-project/app/build.gradle.kts
+      - name: Build signed Release APK and AAB
+        working-directory: signed-project
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace assembleRelease bundleRelease
+      - name: Verify signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="signed-project/app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+      - name: Validate and verify signed AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="signed-project/app/build/outputs/bundle/release/app-release.aab"
+          test -f "$AAB"
+          java -jar bundletool.jar validate --bundle="$AAB"
+          jarsigner -verify -verbose -certs "$AAB"
+          unzip -l "$AAB" | grep -E 'META-INF/.*\.(SF|RSA|DSA|EC)$'
+      - name: Upload signed CI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-v17-signed-release-ci
+          path: |
+            signed-project/app/build/outputs/apk/release/app-release.apk
+            signed-project/app/build/outputs/bundle/release/app-release.aab

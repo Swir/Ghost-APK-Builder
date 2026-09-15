@@ -31,7 +31,13 @@ jobs:
       - run: python -m pip install -r requirements-build.txt
       - run: python -m compileall -q app.py ghost_builder tests
       - run: python -m unittest discover -s tests -v
-      - run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --name "Ghost-APK-Builder" app.py
+      - name: Materialize Ghost icon
+        shell: pwsh
+        run: |
+          $raw = (Get-Content "assets/ghost_icon.ico.b64" -Raw).Trim()
+          [IO.File]::WriteAllBytes("assets/ghost_icon.ico", [Convert]::FromBase64String($raw))
+          if (-not (Test-Path "assets/ghost_icon.ico")) { throw "Ghost icon materialization failed" }
+      - run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --icon "assets/ghost_icon.ico" --name "Ghost-APK-Builder" app.py
       - name: Smoke-launch standalone EXE without Python runtime variables
         shell: pwsh
         run: |
