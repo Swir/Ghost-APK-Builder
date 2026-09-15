@@ -12,7 +12,7 @@ from ghost_builder.model import ProjectConfig
 from ghost_builder.project_store import RecentProjects, load_project, save_project
 from ghost_builder.readiness import check_play_readiness
 class FoundationTests(unittest.TestCase):
-    def test_version_profile(self):self.assertEqual(VERSION,"17.0.0-beta.1");self.assertEqual(ANDROID_API,36);self.assertEqual(BUILD_TOOLS,"36.0.0");self.assertEqual(GRADLE_VERSION,"9.6.0");self.assertEqual(AGP_VERSION,"9.4.0")
+    def test_version_profile(self):self.assertEqual(VERSION,"17.0.0-beta.2");self.assertEqual(ANDROID_API,36);self.assertEqual(BUILD_TOOLS,"36.0.0");self.assertEqual(GRADLE_VERSION,"9.6.0");self.assertEqual(AGP_VERSION,"9.4.0")
     def test_config_never_persists_passwords(self):
         with tempfile.TemporaryDirectory() as td:
             store=ConfigStore(Path(td)/"config.json");store.save({"app_name":"Safe","store_password":"secret1","key_password":"secret2","keystore_pass":"legacy1","key_pass":"legacy2"});raw=json.loads((Path(td)/"config.json").read_text(encoding="utf-8"));self.assertEqual(raw["app_name"],"Safe")
