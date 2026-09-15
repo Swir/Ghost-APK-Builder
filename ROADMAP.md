@@ -62,6 +62,7 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] Full Portable package gate with JDK/Gradle/bundletool green.
 - [x] Signed Release APK/AAB validation gate green.
 - [x] Publish `v17.0.0-beta.1`.
+- [x] Publish `v17.0.0-beta.2` with the physical-device verification workflow.
 - [x] Clean Windows 11 user test reported successful.
 - [x] One-click physical-device verification workflow implemented: ADB detection, install, package verification, launch verification and local PASS report.
 - [ ] Run the physical Android-device verification on real user hardware.
