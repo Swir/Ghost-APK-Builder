@@ -118,19 +118,19 @@ class BuildResultMixin:
             text="Otwórz plik" if pl else "Open file",
             fg_color=ACCENT,
             text_color="#04100e",
-            command=lambda: self._open_result_file(artifact),
+            command=lambda: BuildResultMixin._open_result_file(artifact),
         ).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ctk.CTkButton(
             actions,
             text="Otwórz folder" if pl else "Open folder",
             fg_color=BLUE,
-            command=lambda: self._open_result_folder(artifact),
+            command=lambda: BuildResultMixin._open_result_folder(artifact),
         ).pack(side="left", fill="x", expand=True, padx=5)
         ctk.CTkButton(
             actions,
             text="Kopiuj ścieżkę" if pl else "Copy path",
             fg_color=CARD,
-            command=lambda: self._copy_result_value(str(artifact), "artifact path"),
+            command=lambda: BuildResultMixin._copy_result_value(self, str(artifact), "artifact path"),
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
         second = ctk.CTkFrame(win, fg_color="transparent")
@@ -139,7 +139,7 @@ class BuildResultMixin:
             second,
             text="Kopiuj SHA-256" if pl else "Copy SHA-256",
             fg_color=CARD,
-            command=lambda: self._copy_result_value(data["sha256"], "SHA-256"),
+            command=lambda: BuildResultMixin._copy_result_value(self, data["sha256"], "SHA-256"),
         ).pack(side="left", fill="x", expand=True, padx=(0, 5))
 
         if cfg.export_format == "APK":
@@ -148,7 +148,7 @@ class BuildResultMixin:
                 text="Zainstaluj przez ADB" if pl else "Install via ADB",
                 fg_color=BLUE,
             )
-            adb_btn.configure(command=lambda: self._install_result_apk(artifact, cfg, adb_btn))
+            adb_btn.configure(command=lambda: BuildResultMixin._install_result_apk(self, artifact, cfg, adb_btn))
             adb_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
         else:
             ctk.CTkButton(
