@@ -2,9 +2,9 @@
 
 This roadmap is the source of truth for v17 development.
 
-## Overall progress — 82%
+## Overall progress — 88%
 
-`████████████████░░░░ 82%`
+`██████████████████░░ 88%`
 
 The percentage reflects real milestone and release-gate completion rather than CI volume alone.
 
@@ -35,7 +35,9 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] APK/AAB validation paths.
 - [x] Ephemeral signed Release APK/AAB CI gate.
 - [x] Google Play readiness report for package/API/version/signing/icon/output/security checks.
-- [ ] Certificate fingerprints and richer Play readiness export.
+- [x] SHA-1 / SHA-256 certificate fingerprint viewer.
+- [x] keytool passwords removed from command-line arguments and passed via process environment.
+- [ ] Rich Play readiness export/report file.
 
 ## M4 — Desktop UI 🚧
 - [x] Modern Ghost dark UI and modular UI code.
@@ -46,7 +48,9 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] Simple / Advanced mode with persisted preference.
 - [x] `.ghostproject` project profiles with Kotlin source persistence and secret filtering.
 - [x] Recent Projects list with quick reopen.
-- [ ] Build history, artifact shortcuts and accessibility polish.
+- [x] Persistent Build History with artifact SHA-256, size, duration, mode and signing state.
+- [x] Build-history artifact folder shortcut.
+- [ ] Accessibility polish and richer post-build result panel.
 
 ## M5 — Zero-install Windows release 🚧
 - [x] Standalone EXE and Portable workflow definitions.
