@@ -2,9 +2,9 @@
 
 This roadmap is the source of truth for v17 development.
 
-## Overall progress — 92%
+## Overall progress — 94%
 
-`██████████████████░░ 92%`
+`███████████████████░ 94%`
 
 The percentage reflects real milestone and release-gate completion rather than CI volume alone.
 
@@ -39,7 +39,7 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] keytool passwords removed from command-line arguments and passed via process environment.
 - [ ] Rich Play readiness export/report file.
 
-## M4 — Desktop UI 🚧
+## M4 — Desktop UI ✅
 - [x] Modern Ghost dark UI and modular UI code.
 - [x] Quick Start dashboard with readiness badges.
 - [x] First-run bilingual onboarding wizard.
@@ -50,7 +50,7 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] Recent Projects list with quick reopen.
 - [x] Persistent Build History with artifact SHA-256, size, duration, mode and signing state.
 - [x] Build-history artifact folder shortcut.
-- [x] Rich post-build result panel with file/folder/path/SHA-256 actions and APK ADB install shortcut.
+- [x] Rich post-build result panel with file/folder/path/SHA-256 actions.
 - [x] Basic accessibility polish for the result flow: keyboard focus and Escape-to-close behavior.
 
 ## M5 — Zero-install Windows release 🚧
@@ -63,7 +63,8 @@ The percentage reflects real milestone and release-gate completion rather than C
 - [x] Signed Release APK/AAB validation gate green.
 - [x] Publish `v17.0.0-beta.1`.
 - [x] Clean Windows 11 user test reported successful.
-- [ ] Physical Android-device install/build test.
+- [x] One-click physical-device verification workflow implemented: ADB detection, install, package verification, launch verification and local PASS report.
+- [ ] Run the physical Android-device verification on real user hardware.
 - [ ] Stable v17.0.0.
 
 ### Zero-install definition
