@@ -3,6 +3,7 @@ from unittest import mock
 from pathlib import Path
 from ghost_builder import ANDROID_API, AGP_VERSION, BUILD_TOOLS, GRADLE_VERSION, VERSION
 from ghost_builder.build_history import BuildHistoryStore
+from ghost_builder.builder import GhostBuilder
 from ghost_builder.certificates import parse_keytool_fingerprints
 from ghost_builder.core import ConfigStore, Paths, ToolchainManager
 from ghost_builder.generator import AndroidProjectGenerator, normalize_kotlin_source
@@ -70,4 +71,10 @@ class FoundationTests(unittest.TestCase):
             root=Path(td);artifact=root/"demo.apk";artifact.write_bytes(b"ghost-apk");store=BuildHistoryStore(root/"history.json",limit=5);item=store.record(artifact,ProjectConfig(app_name="Demo",package_name="com.swir.demo",version_name="2.1",version_code=7,export_format="APK",build_mode="Release",signing_enabled=True),12.345);self.assertEqual(item["app_name"],"Demo");self.assertTrue(item["signed"]);self.assertEqual(item["duration_seconds"],12.35);self.assertEqual(len(item["sha256"]),64);self.assertEqual(store.load()[0]["artifact"],str(artifact.resolve()))
     def test_certificate_fingerprint_parser(self):
         text="Certificate fingerprints:\n\t SHA1: AA:BB:CC:DD\n\t SHA256: 11:22:33:44:55\n";found=parse_keytool_fingerprints(text);self.assertEqual(found["SHA1"],"AA:BB:CC:DD");self.assertEqual(found["SHA256"],"11:22:33:44:55")
+    def test_keytool_password_is_not_in_process_arguments(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);keytool=root/"keytool.exe";keytool.write_text("x",encoding="utf-8");toolchain=mock.Mock();toolchain.keytool_exe.return_value=keytool;toolchain.env.return_value={};builder=GhostBuilder(toolchain);secret="UltraSecret123";target=root/"release.jks"
+            completed=mock.Mock(returncode=0,stdout="",stderr="")
+            with mock.patch("ghost_builder.builder.subprocess.run",return_value=completed) as run:builder.generate_keystore(target,secret,"ghost")
+            args=run.call_args.args[0];env=run.call_args.kwargs["env"];self.assertNotIn(secret,args);self.assertEqual(env["GHOST_KEYTOOL_STOREPASS"],secret);self.assertEqual(env["GHOST_KEYTOOL_KEYPASS"],secret);self.assertIn("-storepass:env",args);self.assertIn("-keypass:env",args)
 if __name__=="__main__":unittest.main()
