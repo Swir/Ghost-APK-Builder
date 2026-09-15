@@ -1,14 +1,30 @@
 name: Ghost v17 Release
+
 on:
   pull_request:
-    paths: ["app.py", "ghost_builder/**", "requirements*.txt", "runtime_manifest.json", ".github/workflows/release.yml"]
+    paths:
+      - "app.py"
+      - "ghost_builder/**"
+      - "requirements*.txt"
+      - "runtime_manifest.json"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
-      version: {description: Release tag, required: true, default: v17.0.0-dev.2}
+      version:
+        description: Release tag, for example v17.0.0-dev.2
+        required: true
+        default: v17.0.0-dev.2
   push:
-    tags: ["v17.*"]
+    tags:
+      - "v17.*"
+
+concurrency:
+  group: ghost-v17-release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
+
 jobs:
   package:
     name: Build verified Windows package
@@ -17,30 +33,128 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
+        with:
+          python-version: "3.11"
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $v = "${{ inputs.version }}"
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
+            $v = "${{ github.ref_name }}"
+          } else {
+            $v = "v" + (python -c "from ghost_builder import VERSION; print(VERSION)")
+          }
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Test source
         shell: pwsh
         run: |
           python -m pip install -r requirements-build.txt
           python -m compileall -q app.py ghost_builder tests
           python -m unittest discover -s tests -v
-      - run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --name "Ghost-APK-Builder" app.py
+      - name: Build standalone EXE
+        shell: pwsh
+        run: pyinstaller --noconfirm --clean --onefile --windowed --collect-all customtkinter --name "Ghost-APK-Builder" app.py
       - name: Smoke-test standalone EXE
         shell: pwsh
         run: |
           Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
           Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
-          $p=Start-Process -FilePath "dist/Ghost-APK-Builder.exe" -ArgumentList "--smoke-test" -PassThru
-          if(-not $p.WaitForExit(20000)){Stop-Process -Id $p.Id -Force;throw "EXE smoke timeout"}
-          if($p.ExitCode -ne 0){throw "EXE smoke failed"}
-      - name: Package metadata gate
+          $p = Start-Process -FilePath "dist/Ghost-APK-Builder.exe" -ArgumentList "--smoke-test" -PassThru
+          if (-not $p.WaitForExit(20000)) { Stop-Process -Id $p.Id -Force; throw "EXE smoke timeout" }
+          if ($p.ExitCode -ne 0) { throw "EXE smoke failed: $($p.ExitCode)" }
+      - name: Build verified Portable package
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force portable | Out-Null
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path portable/runtime,portable/licenses | Out-Null
           Copy-Item dist/Ghost-APK-Builder.exe portable/Ghost-APK-Builder.exe
-          Copy-Item README.md,ROADMAP.md,CHANGELOG.md,SECURITY.md,THIRD_PARTY_NOTICES.md,runtime_manifest.json portable/
-          Compress-Archive -Path portable/* -DestinationPath Ghost-APK-Builder-v17-ci-Portable.zip -Force
+          Copy-Item README.md,ROADMAP.md,CHANGELOG.md,SECURITY.md,THIRD_PARTY_NOTICES.md,MIGRATION_V16_TO_V17.md,AUDIT_V16_4.md,CONTRIBUTING.md,runtime_manifest.json portable/
+          Copy-Item docs portable/docs -Recurse
+
+          $jdkMeta = Invoke-RestMethod -Uri "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse&heap_size=normal"
+          $jdkPackage = $jdkMeta[0].binary.package
+          Invoke-WebRequest -Uri $jdkPackage.link -OutFile jdk.zip
+          if ((Get-FileHash jdk.zip -Algorithm SHA256).Hash.ToLower() -ne $jdkPackage.checksum.ToLower()) { throw "Temurin SHA-256 failed" }
+          Expand-Archive jdk.zip -DestinationPath jdk-extract -Force
+          $jdkRoot = Get-ChildItem jdk-extract -Directory | Select-Object -First 1
+          Copy-Item $jdkRoot.FullName portable/runtime/jdk -Recurse
+          if (Test-Path "$($jdkRoot.FullName)/legal") { Copy-Item "$($jdkRoot.FullName)/legal" portable/licenses/temurin-legal -Recurse }
+          if (Test-Path "$($jdkRoot.FullName)/NOTICE") { Copy-Item "$($jdkRoot.FullName)/NOTICE" portable/licenses/temurin-NOTICE.txt }
+
+          $gradleUri = "https://services.gradle.org/distributions/gradle-9.6.0-bin.zip"
+          Invoke-WebRequest -Uri $gradleUri -OutFile gradle.zip
+          Invoke-WebRequest -Uri "$gradleUri.sha256" -OutFile gradle.sha256
+          $expected = (Get-Content gradle.sha256 -Raw).Trim().Split()[0].ToLower()
+          if ((Get-FileHash gradle.zip -Algorithm SHA256).Hash.ToLower() -ne $expected) { throw "Gradle SHA-256 failed" }
+          Expand-Archive gradle.zip -DestinationPath gradle-extract -Force
+          $gradleRoot = Get-ChildItem gradle-extract -Directory | Select-Object -First 1
+          Copy-Item $gradleRoot.FullName portable/runtime/gradle -Recurse
+          if (Test-Path "$($gradleRoot.FullName)/LICENSE") { Copy-Item "$($gradleRoot.FullName)/LICENSE" portable/licenses/gradle-LICENSE.txt }
+          if (Test-Path "$($gradleRoot.FullName)/NOTICE") { Copy-Item "$($gradleRoot.FullName)/NOTICE" portable/licenses/gradle-NOTICE.txt }
+
+          $bundletool = "portable/runtime/bundletool/bundletool-all-1.18.3.jar"
+          New-Item -ItemType Directory -Force -Path (Split-Path $bundletool) | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar" -OutFile $bundletool
+          $bundleExpected = "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29"
+          if ((Get-FileHash $bundletool -Algorithm SHA256).Hash.ToLower() -ne $bundleExpected) { throw "bundletool SHA-256 failed" }
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/google/bundletool/1.18.3/LICENSE" -OutFile "portable/licenses/bundletool-LICENSE.txt"
+
+          $java = Get-ChildItem portable/runtime/jdk -Recurse -Filter java.exe | Select-Object -First 1
+          $keytool = Get-ChildItem portable/runtime/jdk -Recurse -Filter keytool.exe | Select-Object -First 1
+          $jarsigner = Get-ChildItem portable/runtime/jdk -Recurse -Filter jarsigner.exe | Select-Object -First 1
+          $gradle = Get-ChildItem portable/runtime/gradle -Recurse -Filter gradle.bat | Select-Object -First 1
+          if (-not $java -or -not $keytool -or -not $jarsigner -or -not $gradle) { throw "Portable runtime validation failed" }
+          & $java.FullName -jar $bundletool version
+          if ($LASTEXITCODE -ne 0) { throw "bundletool execution failed" }
+          & $gradle.FullName --version | Select-Object -First 20
+          if ($LASTEXITCODE -ne 0) { throw "Gradle execution failed" }
+
+          Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+          Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath (Resolve-Path "portable/Ghost-APK-Builder.exe") -ArgumentList "--smoke-test" -WorkingDirectory (Resolve-Path portable) -PassThru
+          if (-not $p.WaitForExit(20000)) { Stop-Process -Id $p.Id -Force; throw "Portable EXE smoke timeout" }
+          if ($p.ExitCode -ne 0) { throw "Portable EXE smoke failed" }
+
+          $exe = "Ghost-APK-Builder-$env:VERSION-Windows-x64.exe"
+          Copy-Item dist/Ghost-APK-Builder.exe $exe
+          $exeHash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "$exeHash  $exe" | Set-Content "$exe.sha256"
+          $zip = "Ghost-APK-Builder-$env:VERSION-Portable-Windows-x64.zip"
+          Compress-Archive -Path portable/* -DestinationPath $zip -Force
+          $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$zipHash  $zip" | Set-Content "$zip.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: ghost-v17-release-package
-          path: Ghost-APK-Builder-v17-ci-Portable.zip
+          path: |
+            Ghost-APK-Builder-*-Windows-x64.exe
+            Ghost-APK-Builder-*-Windows-x64.exe.sha256
+            Ghost-APK-Builder-*-Portable-Windows-x64.zip
+            Ghost-APK-Builder-*-Portable-Windows-x64.zip.sha256
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"; else echo "VERSION=${{ github.ref_name }}" >> "$GITHUB_ENV"; fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: ghost-v17-release-package
+          path: release-assets
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          NOTES="Ghost APK Builder ${VERSION}. Bilingual PL/EN Windows app, standalone EXE and verified Portable package with JDK 21, Gradle 9.6.0 and bundletool 1.18.3. Android SDK is provisioned by Ghost after explicit SDK-license acceptance and is not redistributed in the archive."
+          if [[ "$VERSION" == *-* ]]; then PRE="--prerelease"; else PRE=""; fi
+          gh release create "$VERSION" Ghost-APK-Builder-* --target "${{ github.sha }}" --title "Ghost APK Builder $VERSION" --notes "$NOTES" $PRE --repo "${{ github.repository }}"
