@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="72" viewBox="0 0 900 72" role="img" aria-labelledby="title desc">
+  <title id="title">Ghost APK Builder v17 roadmap progress</title><desc id="desc">Documented v17 roadmap progress is 94.0 percent. Stable release still requires real physical-device verification.</desc>
+  <defs><linearGradient id="fill" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0088FF"/><stop offset="1" stop-color="#62E5FF"/></linearGradient></defs>
+  <rect x="1" y="1" width="898" height="70" rx="16" fill="#02050A" stroke="#62E5FF" stroke-opacity=".25"/>
+  <text x="24" y="27" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="700">Ghost v17 · documented roadmap</text>
+  <rect x="220" y="28" width="570" height="12" rx="6" fill="#0B1928"/><rect x="220" y="28" width="535.8" height="12" rx="6" fill="url(#fill)"/>
+  <text x="868" y="43" text-anchor="end" fill="#62E5FF" font-family="Segoe UI,Arial,sans-serif" font-size="22" font-weight="800">94.0%</text>
+  <text x="24" y="55" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="11">PUBLIC BETA · physical-device stable gate pending</text>
+</svg>

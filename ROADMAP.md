@@ -4,7 +4,9 @@ This roadmap is the source of truth for v17 development.
 
 ## Overall progress — 94%
 
-`███████████████████░ 94%`
+<img width="100%" src="assets/readme/progress-mini.svg" alt="Ghost APK Builder v17 roadmap progress — 94%" />
+
+**Roadmap progress: 94%.** This percentage preserves the repository's documented v17 milestone/release-gate model; it is not an equal-weight count of every checkbox below.
 
 The percentage reflects real milestone and release-gate completion rather than CI volume alone.
 

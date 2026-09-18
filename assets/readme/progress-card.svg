@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="180" viewBox="0 0 1200 180" role="img" aria-labelledby="title desc">
+  <title id="title">Ghost APK Builder v17 roadmap progress</title>
+  <desc id="desc">Ghost APK Builder v17 documented roadmap progress is 94.0 percent under the repository's existing milestone and release-gate model. Stable release remains blocked on real physical-device verification.</desc>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#02050A"/><stop offset="1" stop-color="#07111C"/></linearGradient><linearGradient id="fill" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#0088FF"/><stop offset="1" stop-color="#62E5FF"/></linearGradient><pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#62E5FF" stroke-opacity=".05"/></pattern></defs>
+  <rect x="1" y="1" width="1198" height="178" rx="22" fill="url(#bg)" stroke="#62E5FF" stroke-opacity=".24"/><rect x="1" y="1" width="1198" height="178" rx="22" fill="url(#grid)"/>
+  <text x="50" y="38" fill="#62E5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="3">SWIR PROGRESS</text>
+  <text x="50" y="76" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="27" font-weight="800">Ghost APK Builder · v17 roadmap</text>
+  <text x="50" y="103" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="14">Documented milestone / release-gate model · stable hardware gate still pending</text>
+  <text x="1150" y="76" text-anchor="end" fill="#F4FAFF" font-family="Segoe UI,Arial,sans-serif" font-size="32" font-weight="800">94.0%</text>
+  <rect x="50" y="120" width="1100" height="16" rx="8" fill="#0B1928" stroke="#62E5FF" stroke-opacity=".16"/>
+  <rect x="50" y="120" width="1034" height="16" rx="8" fill="url(#fill)"/>
+  <text x="50" y="160" fill="#8DA8B8" font-family="Segoe UI,Arial,sans-serif" font-size="12">PUBLIC BETA · source: ROADMAP.md · stable v17.0.0 is not yet released</text>
+</svg>
