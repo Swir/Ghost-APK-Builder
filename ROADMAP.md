@@ -4,7 +4,9 @@ This roadmap is the source of truth for v17 development.
 
 ## Overall progress — 94%
 
-`███████████████████░ 94%`
+<img width="100%" src="assets/readme/progress-mini.svg" alt="Ghost APK Builder v17 roadmap progress — 94%" />
+
+**Roadmap progress: 94%.** This percentage preserves the repository's documented v17 milestone/release-gate model; it is not an equal-weight count of every checkbox below.
 
 The percentage reflects real milestone and release-gate completion rather than CI volume alone.
 
@@ -41,7 +43,7 @@ The percentage reflects real milestone and release-gate completion rather than C
 
 ## M4 — Desktop UI ✅
 - [x] Modern Ghost dark UI and modular UI code.
-- [x] Quick Start dashboard with readiness badges.
+ [x] Quick Start dashboard with readiness badges.
 - [x] First-run bilingual onboarding wizard.
 - [x] PL system detection, English fallback and persisted PL/EN switch.
 - [x] Thread-safe worker queue and diagnostic logs.
