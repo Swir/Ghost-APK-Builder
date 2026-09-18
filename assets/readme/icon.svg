@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Ghost APK Builder README icon</title><desc id="desc">Electric cyan ghost mark on a dark rounded square.</desc>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0088FF"/><stop offset="1" stop-color="#62E5FF"/></linearGradient></defs>
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="#02050A" stroke="#62E5FF" stroke-opacity=".35" stroke-width="4"/>
+  <path d="M58 190V112C58 70 84 46 128 46C172 46 198 70 198 112V190L170 170L148 192L126 170L104 192L82 170Z" fill="#07111C" stroke="url(#g)" stroke-width="10" stroke-linejoin="round"/>
+  <circle cx="105" cy="110" r="10" fill="#62E5FF"/><circle cx="151" cy="110" r="10" fill="#62E5FF"/>
+</svg>
