@@ -43,7 +43,7 @@ The percentage reflects real milestone and release-gate completion rather than C
 
 ## M4 — Desktop UI ✅
 - [x] Modern Ghost dark UI and modular UI code.
- [x] Quick Start dashboard with readiness badges.
+- [x] Quick Start dashboard with readiness badges.
 - [x] First-run bilingual onboarding wizard.
 - [x] PL system detection, English fallback and persisted PL/EN switch.
 - [x] Thread-safe worker queue and diagnostic logs.
