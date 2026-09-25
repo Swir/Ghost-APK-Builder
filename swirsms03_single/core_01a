@@ -1,0 +1,24 @@
+clear() = p.edit().clear().apply()
+    private fun persist(items: List<HistoryEntry>) {
+        val a = JSONArray(); items.forEach { e -> a.put(JSONObject().apply { put("id", e.id); put("time", e.timestamp); put("name", e.recipientName); put("number", e.recipientNumber); put("text", e.text); put("sim", e.simLabel); put("status", e.status); put("details", e.details) }) }
+        p.edit().putString("items", a.toString()).apply()
+    }
+}
+
+data class SmsTemplate(val id: Long, val name: String, val text: String)
+class TemplateStore(context: Context) {
+    private val p = context.getSharedPreferences("swirsms_templates_v3", Context.MODE_PRIVATE)
+    fun load(): List<SmsTemplate> = runCatching { val a=JSONArray(p.getString("items","[]")?:"[]"); buildList { for(i in 0 until a.length()) a.getJSONObject(i).let { add(SmsTemplate(it.optLong("id"),it.optString("name"),it.optString("text"))) } } }.getOrElse { emptyList() }
+    fun add(name: String, text: String) { persist((listOf(SmsTemplate(System.currentTimeMillis(), name.ifBlank{"Szablon"}, text)) + load()).take(50)) }
+    fun delete(id: Long) = persist(load().filterNot { it.id == id })
+    private fun persist(items: List<SmsTemplate>) { val a=JSONArray(); items.forEach { a.put(JSONObject().put("id",it.id).put("name",it.name).put("text",it.text)) }; p.edit().putString("items",a.toString()).apply() }
+}
+
+data class SimInfo(val subscriptionId: Int, val slotIndex: Int, val label: String)
+object SimRepository {
+    fun active(context: Context): List<SimInfo> {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return emptyList()
+        val sm = context.getSystemService(SubscriptionManager::class.java) ?: return emptyList()
+        return runCatching { sm.activeSubscriptionInfoList.orEmpty().map { i -> SimInfo(i.subscriptionId, i.simSlotIndex, "${i.carrierName?.toString()?.ifBlank { "SIM" } ?: "SIM"} • SIM ${i.simSlotIndex+1}") }.sortedBy { it.slotIndex } }.getOrElse { emptyList() }
+    }
+}
