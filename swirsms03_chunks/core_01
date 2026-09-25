@@ -1,0 +1,170 @@
+refs.getString("items", "[]") ?: "[]")
+        buildList {
+            for (i in 0 until a.length()) {
+                val o = a.getJSONObject(i)
+                val rs = o.optJSONArray("recipients") ?: JSONArray()
+                val recipients = buildList {
+                    for (j in 0 until rs.length()) {
+                        val r = rs.getJSONObject(j)
+                        add(Recipient(r.optString("name"), r.optString("number")))
+                    }
+                }
+                add(RecipientGroup(o.optLong("id"), o.optString("name"), recipients))
+            }
+        }
+    }.getOrElse { emptyList() }
+
+    fun add(name: String, recipients: List<Recipient>): List<RecipientGroup> {
+        val item = RecipientGroup(System.currentTimeMillis(), name.trim().ifBlank { "Grupa" }, recipients)
+        val updated = (listOf(item) + load()).take(30)
+        persist(updated)
+        return updated
+    }
+
+    fun delete(id: Long): List<RecipientGroup> {
+        val updated = load().filterNot { it.id == id }
+        persist(updated)
+        return updated
+    }
+
+    private fun persist(items: List<RecipientGroup>) {
+        val a = JSONArray()
+        items.forEach { g ->
+            val rs = JSONArray()
+            g.recipients.forEach { rs.put(JSONObject().put("name", it.name).put("number", it.number)) }
+            a.put(JSONObject().put("id", g.id).put("name", g.name).put("recipients", rs))
+        }
+        prefs.edit().putString("items", a.toString()).apply()
+    }
+}
+
+
+data class SimInfo(val subscriptionId: Int, val slotIndex: Int, val label: String)
+
+object SimRepository {
+    fun active(context: Context): List<SimInfo> {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            return emptyList()
+        }
+        val sm = context.getSystemService(SubscriptionManager::class.java) ?: return emptyList()
+        return runCatching {
+            sm.activeSubscriptionInfoList.orEmpty().map { info ->
+                val carrier = info.carrierName?.toString()?.trim().orEmpty()
+                val display = info.displayName?.toString()?.trim().orEmpty()
+                val label = listOf(carrier.ifBlank { display.ifBlank { "SIM" } }, "SIM ${info.simSlotIndex + 1}")
+                    .filter { it.isNotBlank() }
+                    .joinToString(" • ")
+                SimInfo(info.subscriptionId, info.simSlotIndex, label)
+            }.sortedBy { it.slotIndex }
+        }.getOrElse { emptyList() }
+    }
+}
+
+
+data class SendSummary(val queued: Int, val failed: Int, val message: String)
+
+@Suppress("DEPRECATION")
+object SimSmsSender {
+    suspend fun send(
+        context: Context,
+        recipients: List<Recipient>,
+        text: String,
+        subscriptionId: Int,
+        simLabel: String,
+        source: String = "Ręcznie"
+    ): SendSummary = withContext(Dispatchers.IO) {
+        if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_MESSAGING)) {
+            return@withContext SendSummary(0, recipients.size, "To urządzenie nie obsługuje SMS.")
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            return@withContext SendSummary(0, recipients.size, "Brak uprawnienia SEND_SMS.")
+        }
+
+        val history = HistoryStore(context)
+        val manager = if (subscriptionId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+            SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+        } else {
+            SmsManager.getDefault()
+        }
+
+        var queued = 0
+        var failed = 0
+        recipients.forEachIndexed { index, recipient ->
+            val id = System.currentTimeMillis() + index
+            history.add(
+                HistoryEntry(
+                    id = id,
+                    timestamp = System.currentTimeMillis(),
+                    recipientName = recipient.name.ifBlank { "Numer" },
+                    recipientNumber = normalizeNumber(recipient.number),
+                    text = text,
+                    simLabel = simLabel,
+                    status = "KOLEJKA",
+                    details = "Przekazywanie wiadomości do modemu telefonu…",
+                    source = source
+                )
+            )
+
+            try {
+                val parts = manager.divideMessage(text)
+                val partCount = max(parts.size, 1)
+                if (partCount == 1) {
+                    manager.sendTextMessage(
+                        normalizeNumber(recipient.number),
+                        null,
+                        text,
+                        statusPendingIntent(context, ACTION_SMS_SENT, id, "sent", partCount, 0),
+                        statusPendingIntent(context, ACTION_SMS_DELIVERED, id, "delivered", partCount, 0)
+                    )
+                } else {
+                    val sent = ArrayList<PendingIntent>(partCount)
+                    val delivered = ArrayList<PendingIntent>(partCount)
+                    for (part in 0 until partCount) {
+                        sent += statusPendingIntent(context, ACTION_SMS_SENT, id, "sent", partCount, part)
+                        delivered += statusPendingIntent(context, ACTION_SMS_DELIVERED, id, "delivered", partCount, part)
+                    }
+                    manager.sendMultipartTextMessage(
+                        normalizeNumber(recipient.number),
+                        null,
+                        parts,
+                        sent,
+                        delivered
+                    )
+                }
+                queued++
+            } catch (e: Exception) {
+                failed++
+                history.update(id, "BŁĄD", "Nie udało się przekazać SMS do modemu: ${e.message ?: "nieznany błąd"}")
+            }
+        }
+        SendSummary(queued, failed, "Do modemu przekazano $queued wiadomości${if (failed > 0) ", błędy: $failed" else ""}.")
+    }
+
+    private fun statusPendingIntent(
+        context: Context,
+        action: String,
+        historyId: Long,
+        kind: String,
+        partCount: Int,
+        partIndex: Int
+    ): PendingIntent {
+        val intent = Intent(context, SmsStatusReceiver::class.java).apply {
+            this.action = action
+            data = Uri.parse("swirsms://status/$historyId/$kind/$partIndex")
+            putExtra(EXTRA_HISTORY_ID, historyId)
+            putExtra(EXTRA_PART_COUNT, partCount)
+            putExtra(EXTRA_KIND, kind)
+        }
+        val requestCode = (historyId xor (partIndex.toLong() shl 20) xor kind.hashCode().toLong()).hashCode()
+        return PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+}
+
+class SmsStatusReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.
