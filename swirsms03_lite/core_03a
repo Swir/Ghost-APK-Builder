@@ -1,0 +1,18 @@
+_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+}
+
+class SmsStatusReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.getLongExtra(EXTRA_HISTORY_ID, -1L); if (id <= 0) return
+        val kind = intent.getStringExtra(EXTRA_KIND).orEmpty(); val count = intent.getIntExtra(EXTRA_PART_COUNT, 1).coerceAtLeast(1)
+        val ok = resultCode == Activity.RESULT_OK
+        val detail = if (ok) "OK" else when (resultCode) {
+            SmsManager.RESULT_ERROR_NO_SERVICE -> "Brak usługi sieciowej."
+            SmsManager.RESULT_ERROR_RADIO_OFF -> "Modem jest wyłączony."
+            SmsManager.RESULT_ERROR_LIMIT_EXCEEDED -> "Limit wysyłki został przekroczony."
+            else -> "Błąd SMS (kod $resultCode)."
+        }
+        HistoryStore(context).recordPart(id, kind, ok, count, detail)
+    }
+}
