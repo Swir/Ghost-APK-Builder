@@ -1,0 +1,52 @@
+package com.swir.swirsms
+
+import android.Manifest
+import android.app.Activity
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.telephony.SmsManager
+import android.telephony.SubscriptionManager
+import androidx.core.content.ContextCompat
+import org.json.JSONArray
+import org.json.JSONObject
+import kotlin.math.max
+
+const val ACTION_SMS_SENT = "com.swir.swirsms.SMS_SENT"
+const val ACTION_SMS_DELIVERED = "com.swir.swirsms.SMS_DELIVERED"
+const val EXTRA_HISTORY_ID = "history_id"
+const val EXTRA_PART_COUNT = "part_count"
+const val EXTRA_KIND = "kind"
+
+data class AppSettings(
+    val defaultSubscriptionId: Int = SubscriptionManager.INVALID_SUBSCRIPTION_ID,
+    val confirmBeforeSend: Boolean = true,
+    val biometricLock: Boolean = false
+)
+class SettingsStore(context: Context) {
+    private val p = context.getSharedPreferences("swirsms_settings_v3", Context.MODE_PRIVATE)
+    fun load() = AppSettings(p.getInt("sub", SubscriptionManager.INVALID_SUBSCRIPTION_ID), p.getBoolean("confirm", true), p.getBoolean("bio", false))
+    fun save(v: AppSettings) { p.edit().putInt("sub", v.defaultSubscriptionId).putBoolean("confirm", v.confirmBeforeSend).putBoolean("bio", v.biometricLock).apply() }
+}
+
+data class Recipient(val name: String, val number: String)
+data class HistoryEntry(val id: Long, val timestamp: Long, val recipientName: String, val recipientNumber: String, val text: String, val simLabel: String, val status: String, val details: String)
+
+class HistoryStore(context: Context) {
+    private val p = context.applicationContext.getSharedPreferences("swirsms_history_v3", Context.MODE_PRIVATE)
+    fun load(): List<HistoryEntry> = runCatching {
+        val a = JSONArray(p.getString("items", "[]") ?: "[]")
+        buildList { for (i in 0 until a.length()) a.getJSONObject(i).let { o -> add(HistoryEntry(o.optLong("id"), o.optLong("time"), o.optString("name"), o.optString("number"), o.optString("text"), o.optString("sim"), o.optString("status"), o.optString("details"))) } }
+    }.getOrElse { emptyList() }
+    @Synchronized fun add(e: HistoryEntry) = persist((listOf(e) + load().filterNot { it.id == e.id }).take(300))
+    @Synchronized fun update(id: Long, status: String, details: String) = persist(load().map { if (it.id == id) it.copy(status = status, details = details) else it })
+    @Synchronized fun part(id: Long, kind: String, ok: Boolean, count: Int, detail: String) {
+        if (!ok) { update(id, "BŁĄD", detail); p.edit().putBoolean("failed_$id", true).apply(); return }
+        if (p.getBoolean("failed_$id", false)) return
+        val key = "${kind}_$id"; val n = p.getInt(key, 0) + 1; p.edit().putInt(key, n).apply()
+        if (n >= count) if (kind == "delivered") update(id, "DOSTARCZONO", "Sieć potwierdziła dostarczenie.") else update(id, "WYSŁANO", "Operator przyjął wiadomość.")
+    }
+    fun 
