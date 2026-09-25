@@ -1,0 +1,69 @@
+PhoneAndroid, null, modifier = Modifier.size(16.dp)) })
+            Spacer(Modifier.width(10.dp))
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg)
+    )
+}
+
+@Composable
+private fun SendScreen(
+    context: Context,
+    settings: AppSettings,
+    historyStore: HistoryStore,
+    templateStore: TemplateStore,
+    groupStore: GroupStore,
+    onSent: () -> Unit
+) {
+    var recipients by remember { mutableStateOf(emptyList<Recipient>()) }
+    var number by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf("") }
+    var sims by remember { mutableStateOf(SimRepository.active(context)) }
+    var selectedSub by remember { mutableIntStateOf(settings.defaultSubscriptionId) }
+    var status by remember { mutableStateOf("Gotowy") }
+    var confirm by remember { mutableStateOf(false) }
+    var showTemplateName by remember { mutableStateOf(false) }
+    var showGroupName by remember { mutableStateOf(false) }
+    val stats = remember(text) { SmsMath.stats(text) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        sims = SimRepository.active(context)
+    }
+    val contactLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) {
+            runCatching {
+                val projection = arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME)
+                context.contentResolver.query(uri, projection, null, null, null)?.use { c ->
+                    if (c.moveToFirst()) {
+                        val id = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
+                        val name = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME)).orEmpty()
+                        context.contentResolver.query(
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + "=?", arrayOf(id), null
+                        )?.use { p ->
+                            if (p.moveToFirst()) {
+                                val n = p.getString(0).orEmpty()
+                                if (isPlausibleNumber(n) && recipients.size < SimSmsSender.MAX_BATCH) recipients = (recipients + Recipient(name, n)).distinctBy { normalizeNumber(it.number) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun doSend() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE)); return
+        }
+        val sim = sims.firstOrNull { it.subscriptionId == selectedSub }
+        val result = SimSmsSender.send(context, recipients, text, selectedSub, sim?.label ?: "Domyślna SIM")
+        status = result.message
+        if (result.queued > 0) { onSent(); text = "" }
+    }
+
+    if (confirm) ConfirmSendDialog(recipients.size, stats.segments, selectedSub, sims, onDismiss = { confirm = false }) {
+        confirm = false; doSend()
+    }
+    if (showTemplateName) NameDialog("Zapisz szablon", "Nazwa szablonu", onDismiss = { showTemplateName = false }) { name ->
+        templateStore.add(name, text); showTe
