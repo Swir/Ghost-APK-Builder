@@ -1,0 +1,17 @@
+data class SmsStats(val encoding: String, val units: Int, val segments: Int, val limit: Int)
+object SmsMath {
+    private val gsmBasic = ("@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà").toSet()
+    private val gsmExtended = "^{}\\[~]|€".toSet()
+    fun stats(text: String): SmsStats {
+        var septets = 0; var gsm = true
+        text.forEach { c -> when { c in gsmBasic -> septets++; c in gsmExtended -> septets += 2; else -> gsm = false } }
+        if (gsm) { val limit = if (septets <= 160) 160 else 153; return SmsStats("GSM-7", septets, if (septets == 0) 0 else (septets + limit - 1) / limit, limit) }
+        val chars = text.codePointCount(0, text.length); val limit = if (chars <= 70) 70 else 67
+        return SmsStats("Unicode", chars, if (chars == 0) 0 else (chars + limit - 1) / limit, limit)
+    }
+}
+fun normalizeNumber(number: String) = number.trim().filter { it.isDigit() || it == '+' }
+fun isPlausibleNumber(number: String): Boolean {
+    val c = normalizeNumber(number); val d = c.count { it.isDigit() }
+    return d in 5..15 && c.count { it == '+' } <= 1 && (!c.contains('+') || c.startsWith('+'))
+}
