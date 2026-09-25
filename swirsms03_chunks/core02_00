@@ -1,0 +1,74 @@
+getLongExtra(EXTRA_HISTORY_ID, -1L)
+        if (id <= 0) return
+        val kind = intent.getStringExtra(EXTRA_KIND).orEmpty()
+        val partCount = intent.getIntExtra(EXTRA_PART_COUNT, 1).coerceAtLeast(1)
+        val ok = resultCode == Activity.RESULT_OK
+        val detail = if (ok) {
+            if (kind == "delivered") "Część wiadomości została dostarczona." else "Część wiadomości została przyjęta przez operatora."
+        } else {
+            smsErrorText(resultCode, kind)
+        }
+        HistoryStore(context).recordPart(id, kind, ok, partCount, detail)
+    }
+
+    private fun smsErrorText(code: Int, kind: String): String {
+        if (kind == "delivered") return "Brak potwierdzenia dostarczenia (kod $code)."
+        return when (code) {
+            SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "Błąd operatora podczas wysyłki SMS."
+            SmsManager.RESULT_ERROR_NO_SERVICE -> "Brak usługi sieci komórkowej."
+            SmsManager.RESULT_ERROR_NULL_PDU -> "Telefon nie utworzył poprawnego PDU SMS."
+            SmsManager.RESULT_ERROR_RADIO_OFF -> "Modem komórkowy jest wyłączony."
+            SmsManager.RESULT_ERROR_LIMIT_EXCEEDED -> "System/operator zablokował wysyłkę z powodu limitu."
+            else -> "Wysyłka SMS nie powiodła się (kod $code)."
+        }
+    }
+}
+
+
+data class ScheduleEntry(
+    val workId: String,
+    val runAt: Long,
+    val recipients: String,
+    val recipientCount: Int,
+    val text: String,
+    val simLabel: String,
+    val state: String
+)
+
+class ScheduleStore(context: Context) {
+    private val prefs = context.getSharedPreferences("swirsms_schedule_v3", Context.MODE_PRIVATE)
+
+    fun load(): List<ScheduleEntry> = runCatching {
+        val a = JSONArray(prefs.getString("items", "[]") ?: "[]")
+        buildList {
+            for (i in 0 until a.length()) {
+                val o = a.getJSONObject(i)
+                add(
+                    ScheduleEntry(
+                        workId = o.optString("workId"),
+                        runAt = o.optLong("runAt"),
+                        recipients = o.optString("recipients"),
+                        recipientCount = o.optInt("recipientCount"),
+                        text = o.optString("text"),
+                        simLabel = o.optString("simLabel"),
+                        state = o.optString("state")
+                    )
+                )
+            }
+        }.sortedByDescending { it.runAt }
+    }.getOrElse { emptyList() }
+
+    fun add(entry: ScheduleEntry): List<ScheduleEntry> {
+        val updated = (listOf(entry) + load().filterNot { it.workId == entry.workId }).take(100)
+        persist(updated)
+        return updated
+    }
+
+    fun updateState(workId: String, state: String) {
+        persist(load().map { if (it.workId == workId) it.copy(state = state) else it })
+    }
+
+    fun remove(workId: String): List<ScheduleEntry> {
+        val updated = load().filterNot { it.workId == workId }
+        persist(updated)
+        return updated
