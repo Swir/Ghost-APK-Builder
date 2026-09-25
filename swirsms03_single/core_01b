@@ -1,0 +1,9 @@
+data class SendResult(val ok: Boolean, val message: String)
+@Suppress("DEPRECATION")
+object SimSmsSender {
+    fun send(context: Context, recipient: Recipient, text: String, subscriptionId: Int, simLabel: String): SendResult {
+        if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_MESSAGING)) return SendResult(false, "Urządzenie nie obsługuje SMS.")
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) return SendResult(false, "Brak uprawnienia SEND_SMS.")
+        if (!isPlausibleNumber(recipient.number) || text.isBlank()) return SendResult(false, "Sprawdź numer i treść.")
+        val manager = if (subscriptionId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) SmsManager.getSmsManagerForSubscriptionId(subscriptionId) else SmsManager.getDefault()
+        val id = System.currentTimeMillis(); val number = normalizeNumber(recipient.number); val 
