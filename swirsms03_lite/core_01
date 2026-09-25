@@ -1,0 +1,66 @@
+, "Sieć potwierdziła dostarczenie wiadomości.")
+            else update(id, "WYSŁANO", "Operator przyjął wiadomość do wysłania.")
+        }
+    }
+
+    fun clear() = prefs.edit().clear().apply()
+
+    private fun persist(items: List<HistoryEntry>) {
+        val a = JSONArray()
+        items.forEach { e -> a.put(JSONObject().apply {
+            put("id", e.id); put("timestamp", e.timestamp); put("recipientName", e.recipientName)
+            put("recipientNumber", e.recipientNumber); put("text", e.text); put("simLabel", e.simLabel)
+            put("status", e.status); put("details", e.details)
+        }) }
+        prefs.edit().putString("items", a.toString()).apply()
+    }
+}
+
+data class SmsTemplate(val id: Long, val name: String, val text: String)
+class TemplateStore(context: Context) {
+    private val prefs = context.getSharedPreferences("swirsms_templates_v3", Context.MODE_PRIVATE)
+    fun load(): List<SmsTemplate> = runCatching {
+        val a = JSONArray(prefs.getString("items", "[]") ?: "[]")
+        buildList { for (i in 0 until a.length()) a.getJSONObject(i).let { add(SmsTemplate(it.optLong("id"), it.optString("name"), it.optString("text"))) } }
+    }.getOrElse { emptyList() }
+    fun add(name: String, text: String) {
+        persist((listOf(SmsTemplate(System.currentTimeMillis(), name.ifBlank { "Szablon" }, text)) + load()).take(50))
+    }
+    fun delete(id: Long) = persist(load().filterNot { it.id == id })
+    private fun persist(items: List<SmsTemplate>) {
+        val a = JSONArray(); items.forEach { a.put(JSONObject().put("id", it.id).put("name", it.name).put("text", it.text)) }
+        prefs.edit().putString("items", a.toString()).apply()
+    }
+}
+
+data class RecipientGroup(val id: Long, val name: String, val recipients: List<Recipient>)
+class GroupStore(context: Context) {
+    private val prefs = context.getSharedPreferences("swirsms_groups_v3", Context.MODE_PRIVATE)
+    fun load(): List<RecipientGroup> = runCatching {
+        val a = JSONArray(prefs.getString("items", "[]") ?: "[]")
+        buildList {
+            for (i in 0 until a.length()) {
+                val o = a.getJSONObject(i); val rs = o.optJSONArray("recipients") ?: JSONArray()
+                val rec = buildList { for (j in 0 until rs.length()) rs.getJSONObject(j).let { add(Recipient(it.optString("name"), it.optString("number"))) } }
+                add(RecipientGroup(o.optLong("id"), o.optString("name"), rec))
+            }
+        }
+    }.getOrElse { emptyList() }
+    fun add(name: String, recipients: List<Recipient>) {
+        persist((listOf(RecipientGroup(System.currentTimeMillis(), name.ifBlank { "Grupa" }, recipients.take(20))) + load()).take(30))
+    }
+    fun delete(id: Long) = persist(load().filterNot { it.id == id })
+    private fun persist(items: List<RecipientGroup>) {
+        val a = JSONArray(); items.forEach { g ->
+            val rs = JSONArray(); g.recipients.forEach { rs.put(JSONObject().put("name", it.name).put("number", it.number)) }
+            a.put(JSONObject().put("id", g.id).put("name", g.name).put("recipients", rs))
+        }
+        prefs.edit().putString("items", a.toString()).apply()
+    }
+}
+
+data class SimInfo(val subscriptionId: Int, val slotIndex: Int, val label: String)
+object SimRepository {
+    fun active(context: Context): List<SimInfo> {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return emptyList()
+        val sm = context.getSyste
