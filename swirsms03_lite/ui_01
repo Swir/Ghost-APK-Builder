@@ -1,0 +1,71 @@
+omptInfo.Builder()
+            .setTitle("Odblokuj SwirSMS")
+            .setSubtitle("Potwierdź tożsamość")
+            .setAllowedAuthenticators(allowed)
+            .build()
+        prompt.authenticate(info)
+    }
+
+    LaunchedEffect(settings.biometricLock) {
+        if (settings.biometricLock && locked) unlock()
+    }
+
+    MaterialTheme(colorScheme = colors) {
+        Surface(modifier = Modifier.fillMaxSize(), color = Bg) {
+            if (locked) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(28.dp), modifier = Modifier.padding(24.dp)) {
+                        Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Lock, null, tint = Cyan, modifier = Modifier.size(52.dp))
+                            Spacer(Modifier.height(16.dp))
+                            Text("SwirSMS zablokowany", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                            Text("Wiadomości i historia pozostają lokalnie na telefonie.", color = Muted, modifier = Modifier.padding(top = 8.dp))
+                            Button(onClick = { unlock() }, modifier = Modifier.padding(top = 20.dp)) { Text("Odblokuj") }
+                        }
+                    }
+                }
+            } else {
+                Scaffold(
+                    containerColor = Bg,
+                    topBar = { AppTopBar() },
+                    bottomBar = {
+                        NavigationBar(containerColor = Panel) {
+                            val labels = listOf("Wyślij", "Historia", "Organizuj", "Ustawienia")
+                            val icons = listOf(Icons.Default.Send, Icons.Default.History, Icons.Default.Folder, Icons.Default.Settings)
+                            labels.forEachIndexed { i, label ->
+                                NavigationBarItem(
+                                    selected = tab == i,
+                                    onClick = { tab = i; if (i == 1) historyVersion++ },
+                                    icon = { Icon(icons[i], null) },
+                                    label = { Text(label, maxLines = 1) }
+                                )
+                            }
+                        }
+                    }
+                ) { pad ->
+                    Box(Modifier.padding(pad).fillMaxSize()) {
+                        when (tab) {
+                            0 -> SendScreen(context, settings, historyStore, templateStore, groupStore, onSent = { historyVersion++ })
+                            1 -> HistoryScreen(historyStore, historyVersion)
+                            2 -> OrganizeScreen(templateStore, groupStore)
+                            else -> SettingsScreen(context, settings, ::saveSettings, onLock = { locked = true })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppTopBar() {
+    TopAppBar(
+        title = {
+            Column {
+                Text("SwirSMS", fontWeight = FontWeight.Black, letterSpacing = 0.4.sp)
+                Text("STANDALONE • SIM ONLY", color = Cyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        actions = {
+            AssistChip(onClick = {}, label = { Text("OFFLINE") }, leadingIcon = { Icon(Icons.Default.
