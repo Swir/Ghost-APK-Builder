@@ -1,0 +1,46 @@
+mService(SubscriptionManager::class.java) ?: return emptyList()
+        return runCatching {
+            sm.activeSubscriptionInfoList.orEmpty().map { info ->
+                val carrier = info.carrierName?.toString()?.trim().orEmpty()
+                SimInfo(info.subscriptionId, info.simSlotIndex, "${carrier.ifBlank { "SIM" }} • SIM ${info.simSlotIndex + 1}")
+            }.sortedBy { it.slotIndex }
+        }.getOrElse { emptyList() }
+    }
+}
+
+data class SendSummary(val queued: Int, val failed: Int, val message: String)
+@Suppress("DEPRECATION")
+object SimSmsSender {
+    const val MAX_BATCH = 20
+    fun send(context: Context, recipients: List<Recipient>, text: String, subscriptionId: Int, simLabel: String): SendSummary {
+        if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_MESSAGING)) return SendSummary(0, recipients.size, "Brak obsługi SMS.")
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) return SendSummary(0, recipients.size, "Brak uprawnienia SEND_SMS.")
+        val cleanRecipients = recipients.filter { isPlausibleNumber(it.number) }.distinctBy { normalizeNumber(it.number) }.take(MAX_BATCH)
+        if (cleanRecipients.isEmpty() || text.isBlank()) return SendSummary(0, recipients.size, "Brak poprawnego odbiorcy lub treści.")
+        val manager = if (subscriptionId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) SmsManager.getSmsManagerForSubscriptionId(subscriptionId) else SmsManager.getDefault()
+        val history = HistoryStore(context)
+        var queued = 0; var failed = 0
+        cleanRecipients.forEachIndexed { index, r ->
+            val id = System.currentTimeMillis() + index
+            history.add(HistoryEntry(id, System.currentTimeMillis(), r.name.ifBlank { "Numer" }, normalizeNumber(r.number), text, simLabel, "KOLEJKA", "Przekazywanie do modemu…"))
+            try {
+                val parts = manager.divideMessage(text); val count = max(parts.size, 1)
+                if (count == 1) manager.sendTextMessage(normalizeNumber(r.number), null, text,
+                    pending(context, ACTION_SMS_SENT, id, "sent", 1, 0), pending(context, ACTION_SMS_DELIVERED, id, "delivered", 1, 0))
+                else {
+                    val sent = ArrayList<PendingIntent>(); val delivered = ArrayList<PendingIntent>()
+                    repeat(count) { p -> sent += pending(context, ACTION_SMS_SENT, id, "sent", count, p); delivered += pending(context, ACTION_SMS_DELIVERED, id, "delivered", count, p) }
+                    manager.sendMultipartTextMessage(normalizeNumber(r.number), null, parts, sent, delivered)
+                }
+                queued++
+            } catch (e: Exception) { failed++; history.update(id, "BŁĄD", e.message ?: "Błąd wysyłki") }
+        }
+        return SendSummary(queued, failed, "Przekazano do modemu: $queued${if (failed > 0) ", błędy: $failed" else ""}")
+    }
+
+    private fun pending(context: Context, action: String, id: Long, kind: String, count: Int, part: Int): PendingIntent {
+        val i = Intent(context, SmsStatusReceiver::class.java).apply {
+            this.action = action; data = Uri.parse("swirsms://status/$id/$kind/$part")
+            putExtra(EXTRA_HISTORY_ID, id); putExtra(EXTRA_PART_COUNT, count); putExtra(EXTRA_KIND, kind)
+        }
+        return PendingIntent.getBroadcast(context, (id xor part.toLong() xor kind.hashCode().toLong()).hashCode(), i, PendingIntent.FLAG_UPDATE
