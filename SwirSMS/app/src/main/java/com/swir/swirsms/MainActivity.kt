@@ -1,7 +1,9 @@
 package com.swir.swirsms
 
+import android.graphics.Color
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricManager
@@ -21,7 +23,7 @@ class MainActivity: FragmentActivity() {
     private val prefs by lazy { LocalPrefs(this) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(statusBarStyle=SystemBarStyle.dark(Color.TRANSPARENT),navigationBarStyle=SystemBarStyle.dark(Color.rgb(8,14,25)))
         updateScreenProtection()
         unlocked=!prefs.lock
         setContent { SwirSmsApp(this) }
