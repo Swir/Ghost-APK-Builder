@@ -1,0 +1,1 @@
+{"name":"konofix-android","version":"0.1.0-dev.2","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs","tauri":"tauri","android:init":"tauri android init --ci","android:build":"tauri android build --debug --apk --target aarch64"},"devDependencies":{"@tauri-apps/cli":"^2"}}
