@@ -18,8 +18,8 @@ p.write_text('package '+package.group(1)+'''\n
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Log
-import app.tauri.TauriActivity
 
+// TauriActivity is generated in this application's package, not app.tauri.
 class MainActivity : TauriActivity() {
     private var multicast: WifiManager.MulticastLock? = null
     override fun onResume() {
