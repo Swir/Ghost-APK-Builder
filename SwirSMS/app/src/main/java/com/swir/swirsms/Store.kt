@@ -45,7 +45,8 @@ class SmsDb private constructor(context: Context) : SQLiteOpenHelper(context, "s
     private fun Cursor.message() = Message(getString(0),getLong(1),getLong(2),getString(3),getString(4),getString(5),getInt(6),getString(7),getInt(8)==1,getString(9),getInt(10),getString(11),getString(12))
     private val columns = "id,created,due,name,number,body,sim,sim_label,reports,state,parts,detail,token"
     fun getMessage(id: String): Message? = readableDatabase.rawQuery("SELECT $columns FROM messages WHERE id=?", arrayOf(id)).use { if (it.moveToFirst()) it.message() else null }
-    fun messages(): List<Message> = readableDatabase.rawQuery("SELECT $columns FROM messages ORDER BY created DESC LIMIT 300", null).use { c -> buildList { while(c.moveToNext()) add(c.message()) } }
+    // Never hide a queued or uncertain message behind the completed-history limit.
+    fun messages(): List<Message> = readableDatabase.rawQuery("SELECT $columns FROM messages WHERE state IN ('QUEUED','SENDING','UNKNOWN') OR id IN (SELECT id FROM messages WHERE state NOT IN ('QUEUED','SENDING','UNKNOWN') ORDER BY created DESC LIMIT 300) ORDER BY created DESC", null).use { c -> buildList { while(c.moveToNext()) add(c.message()) } }
     fun pending(): List<Message> = readableDatabase.rawQuery("SELECT $columns FROM messages WHERE state='QUEUED' ORDER BY due", null).use { c -> buildList { while(c.moveToNext()) add(c.message()) } }
     fun addBatch(people: List<Recipient>, body: String, sim: SimChoice, due: Long, reports: Boolean): List<String> {
         require(people.isNotEmpty() && people.size <= 20 && body.isNotBlank() && body.length <= 1530)

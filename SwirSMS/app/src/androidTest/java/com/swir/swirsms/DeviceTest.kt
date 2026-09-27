@@ -37,10 +37,13 @@ class DeviceTest {
    }
  }
  @Test fun draftPersistsLocally() {
-   compose.onNodeWithTag("message-body").performScrollTo().performTextClearance().performTextInput("SwirSMS draft check")
+   val field=compose.onNodeWithTag("message-body")
+   field.performScrollTo()
+   field.performTextClearance()
+   field.performTextInput("SwirSMS draft check")
    compose.waitForIdle()
    assertEquals("SwirSMS draft check",LocalPrefs(context).draft)
-   compose.onNodeWithTag("message-body").performTextClearance()
+   field.performTextClearance()
  }
  @Test fun invalidSendDoesNotCreateMessages() {
    val before=SmsDb.get(context).messages().size

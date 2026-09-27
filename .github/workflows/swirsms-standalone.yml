@@ -26,6 +26,17 @@ jobs:
         with:
           gradle-version: '9.6.0'
           cache-read-only: false
+      - name: Preserve source and integrity manifest
+        shell: bash
+        run: |
+          mkdir -p source-evidence
+          find SwirSMS -type f -print0 | sort -z | xargs -0 sha256sum > source-evidence/SOURCE-SHA256SUMS.txt
+          zip -qr source-evidence/SwirSMS-0.3-Standalone-source.zip SwirSMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SwirSMS-Standalone-source
+          path: source-evidence/
+          retention-days: 14
       - name: Compile, unit test and lint
         working-directory: SwirSMS
         run: gradle --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest --stacktrace
@@ -42,7 +53,7 @@ jobs:
           (cd deliverables; sha256sum SwirSMS-0.3-Standalone.apk > SHA256SUMS.txt)
           cp -r SwirSMS/app/build/test-results deliverables/VERIFICATION/unit-tests
           cp SwirSMS/app/build/reports/lint-results-debug.* deliverables/VERIFICATION/
-          zip -qr deliverables/SwirSMS-0.3-Standalone-source.zip SwirSMS -x '*/build/*' '*/.gradle/*' '*/.kotlin/*'
+          cp source-evidence/* deliverables/
       - uses: actions/upload-artifact@v4
         with:
           name: SwirSMS-Standalone-build
@@ -63,12 +74,11 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: cd SwirSMS && gradle --no-daemon :app:connectedDebugAndroidTest --stacktrace
-      - name: Collect emulator screenshots
+          script: status=0; (cd SwirSMS && gradle --no-daemon :app:connectedDebugAndroidTest --stacktrace) || status=$?; mkdir -p device-evidence; adb pull /sdcard/Android/data/com.swir.swirsms.standalone/files/screenshots device-evidence/ || true; exit $status
+      - name: Collect device reports
         if: always()
         run: |
           mkdir -p device-evidence
-          adb pull /sdcard/Android/data/com.swir.swirsms.standalone/files/screenshots device-evidence/ || true
           cp -r SwirSMS/app/build/reports/androidTests device-evidence/ 2>/dev/null || true
           cp -r SwirSMS/app/build/outputs/androidTest-results device-evidence/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
