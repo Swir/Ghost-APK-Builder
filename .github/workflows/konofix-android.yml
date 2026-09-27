@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      CARGO_BUILD_JOBS: '2'
+      CARGO_BUILD_JOBS: '4'
       CARGO_PROFILE_DEV_DEBUG: '0'
       CI: 'true'
     steps:
@@ -32,11 +32,26 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" != 'Swir/Konofix'
-          python -m py_compile scripts/import_core.py scripts/post_init.py
+          python -m py_compile scripts/import_core.py scripts/post_init.py scripts/android_dns.py
           node --check web/core.mjs
           node --check web/app.mjs
           python scripts/import_core.py
+          python scripts/android_dns.py --native
           npm run build
+      - name: Restore Android compilation cache
+        id: cargo-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: konofix-android-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml', 'src-tauri/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            konofix-android-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.toml', 'src-tauri/Cargo.lock') }}-
+            konofix-android-${{ runner.os }}-
       - name: Configure Rust and Android toolchains
         run: |
           set -euo pipefail
@@ -52,6 +67,7 @@ jobs:
           npm run tauri -- icon web/icon.svg
           npm run android:init
           python scripts/post_init.py
+          python scripts/android_dns.py --android
       - name: Build signed debug APK with native P2P core
         run: |
           set -euo pipefail
@@ -72,8 +88,8 @@ jobs:
           sha256sum out/*.apk > out/SHA256SUMS.txt
           git rev-parse HEAD > out/android-source-commit.txt
           cp src-tauri/generated/import-report.json out/
-          cp src-tauri/Cargo.lock package-lock.json out/
-          printf 'Debug-signed ARM64 candidate. Real Android-to-PC interoperability has NOT been tested. PC source is read-only; no PC files or releases were modified. Keep the app in the foreground during testing. #WORLD text only.\n' > out/TEST-NOTES.txt
+          cp src-tauri/Cargo.lock package-lock.json TESTING.md out/
+          printf 'Debug-signed ARM64 candidate. Real Android-to-PC interoperability has NOT been tested. PC source is read-only; no PC files or releases were modified. Keep the app in the foreground during testing. #WORLD text only. Fully restart Android app after switching Wi-Fi/LTE.\n' > out/TEST-NOTES.txt
       - uses: actions/upload-artifact@v4
         if: success()
         with:
@@ -88,8 +104,21 @@ jobs:
           path: |
             evidence/
             src-tauri/generated/import-report.json
+            src-tauri/generated/src/lib.rs
             src-tauri/gen/android/app/src/main/AndroidManifest.xml
+            src-tauri/gen/android/app/src/main/java/
             src-tauri/Cargo.lock
             package-lock.json
           if-no-files-found: warn
           retention-days: 14
+      - name: Save Android compilation cache
+        if: always() && steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
